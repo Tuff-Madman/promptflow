@@ -6,7 +6,7 @@ from promptflow._utils.dataclass_serializer import serialize
 from promptflow.contracts.run_info import Status
 from promptflow.executor import FlowExecutor
 
-from ..utils import get_flow_sample_inputs, get_yaml_file
+from ..utils import get_yaml_file
 
 
 @pytest.mark.usefixtures("dev_connections")
@@ -28,6 +28,8 @@ class TestExecutorTraces:
             "openai.api_resources.chat_completion.ChatCompletion.create",
             "openai.api_resources.completion.Completion.create",
             "openai.api_resources.embedding.Embedding.create",
+            "openai.resources.completions.Completions.create",  # openai>=1.0.0
+            "openai.resources.chat.completions.Completions.create",  # openai>=1.0.0
         ):
             get_trace = True
             output = apicall.get("output")
@@ -44,10 +46,27 @@ class TestExecutorTraces:
 
         return get_trace
 
-    @pytest.mark.parametrize("flow_folder", ["openai_chat_api_flow", "openai_completion_api_flow"])
-    def test_executor_openai_api_flow(self, flow_folder, dev_connections):
+    def get_chat_input(stream):
+        return {
+            "question": "What is the capital of the United States of America?", "chat_history": [], "stream": stream
+        }
+
+    def get_comletion_input(stream):
+        return {"prompt": "What is the capital of the United States of America?", "stream": stream}
+
+    @pytest.mark.parametrize(
+        "flow_folder, inputs",
+        [
+            ("openai_chat_api_flow", get_chat_input(False)),
+            ("openai_chat_api_flow", get_chat_input(True)),
+            ("openai_completion_api_flow", get_comletion_input(False)),
+            ("openai_completion_api_flow", get_comletion_input(True)),
+            ("llm_tool", {"topic": "Hello", "stream": False}),
+            ("llm_tool", {"topic": "Hello", "stream": True}),
+        ]
+    )
+    def test_executor_openai_api_flow(self, flow_folder, inputs, dev_connections):
         executor = FlowExecutor.create(get_yaml_file(flow_folder), dev_connections)
-        inputs = get_flow_sample_inputs(flow_folder)
         flow_result = executor.exec_line(inputs)
 
         assert isinstance(flow_result.output, dict)

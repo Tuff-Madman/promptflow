@@ -4,6 +4,8 @@
 
 import argparse
 
+from promptflow._sdk._constants import CLIListOutputFormat, FlowType
+
 # TODO: avoid azure dependency here
 MAX_LIST_CLI_RESULTS = 50
 
@@ -48,21 +50,26 @@ def add_param_yes(parser):
     )
 
 
-def add_param_flow_name(parser):
-    parser.add_argument("--flow", type=str, required=True, help="the flow name to create.")
+def add_param_ua(parser):
+    # suppress user agent for now since it's only used in vscode extension
+    parser.add_argument("--user-agent", help=argparse.SUPPRESS)
+
+
+def add_param_flow_display_name(parser):
+    parser.add_argument("--flow", type=str, required=True, help="The flow name to create.")
 
 
 def add_param_entry(parser):
-    parser.add_argument("--entry", type=str, help="the entry file.")
+    parser.add_argument("--entry", type=str, help="The entry file.")
 
 
 def add_param_function(parser):
-    parser.add_argument("--function", type=str, help="the function name in entry file.")
+    parser.add_argument("--function", type=str, help="The function name in entry file.")
 
 
 def add_param_prompt_template(parser):
     parser.add_argument(
-        "--prompt-template", action=AppendToDictAction, help="the prompt template parameter and assignment.", nargs="+"
+        "--prompt-template", action=AppendToDictAction, help="The prompt template parameter and assignment.", nargs="+"
     )
 
 
@@ -112,9 +119,10 @@ def add_param_columns_mapping(parser):
     parser.add_argument(
         "--column-mapping",
         action=AppendToDictAction,
-        help="Inputs column mapping, use ${data.xx} to refer to data file columns, "
-        "use ${run.inputs.xx} and ${run.outputs.xx} to refer to run inputs/outputs columns. Example: "
-        "--column-mapping data1='${data.data1}' data2='${run.inputs.data2}' data3='${run.outputs.data3}'",
+        help="Inputs column mapping, use ${data.xx} to refer to data columns, "
+        "use ${run.inputs.xx} to refer to referenced run's data columns. "
+        "and use ${run.outputs.xx} to refer to referenced run's output columns."
+        "Example: --column-mapping data1='${data.data1}' data2='${run.inputs.data2}' data3='${run.outputs.data3}'",
         nargs="+",
     )
 
@@ -138,58 +146,30 @@ def add_param_inputs(parser):
     )
 
 
-def add_param_input(parser):
-    parser.add_argument(
-        "--input", type=str, required=True, help="the input file path. Note that we accept jsonl file only for now."
-    )
-
-
 def add_param_env(parser):
     parser.add_argument(
         "--env",
         type=str,
         default=None,
-        help="the dotenv file path containing the environment variables to be used in the flow.",
+        help="The dotenv file path containing the environment variables to be used in the flow.",
     )
 
 
 def add_param_output(parser):
-    parser.add_argument("--output", type=str, default="outputs", help="the output directory to store the results.")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        help="The output directory to store the results. Default to be current working directory if not specified.",
+    )
 
 
-def add_param_flow(parser):
-    parser.add_argument("--flow", type=str, required=True, help="the evaluation flow to be used.")
+def add_param_overwrite(parser):
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite the existing results.")
 
 
 def add_param_source(parser):
     parser.add_argument("--source", type=str, required=True, help="The flow or run source to be used.")
-
-
-def add_param_bulk_run_output(parser):
-    parser.add_argument("--bulk-run-output", type=str, help="the output directory of the bulk run.")
-
-
-def add_param_eval_output(parser):
-    parser.add_argument("--eval-output", type=str, help="the output file path of the evaluation result.")
-
-
-def add_param_column_mapping(parser):
-    parser.add_argument(
-        "--column-mapping", type=str, required=True, help="the column mapping to be used in the evaluation."
-    )
-
-
-def add_param_runtime(parser):
-    parser.add_argument(
-        "--runtime",
-        type=str,
-        default="local",
-        help="Name of your runtime in Azure ML workspace, will run in cloud when runtime is not none.",
-    )
-
-
-def add_param_connection(parser):
-    parser.add_argument("--connection", type=str, help="Name of your connection in Azure ML workspace.")
 
 
 def add_param_run_name(parser):
@@ -198,16 +178,6 @@ def add_param_run_name(parser):
 
 def add_param_connection_name(parser):
     parser.add_argument("-n", "--name", type=str, help="Name of the connection to create.")
-
-
-def add_param_variants(parser):
-    parser.add_argument(
-        "--variants",
-        type=str,
-        nargs="+",
-        help="the variant run ids to be used in the evaluation. Note that we only support one variant for now.",
-        default=[],
-    )
 
 
 def add_param_max_results(parser):
@@ -228,42 +198,6 @@ def add_param_all_results(parser):
         dest="all_results",
         default=False,
         help="Returns all results. Default to False.",
-    )
-
-
-def add_param_subscription(parser):
-    parser.add_argument(
-        "-s",
-        "--subscription",
-        dest="subscription_id",
-        type=str,
-        help=("ID of subscription. You can configure the default subscription \n" "using `az account set -s ID`."),
-    )
-
-
-def add_param_resource_group(parser):
-    parser.add_argument(
-        "-g",
-        "--resource-group",
-        dest="resource_group_name",
-        type=str,
-        help=(
-            "Name of resource group. You can configure the default group using `az \n"
-            "configure --defaults group=<name>`."
-        ),
-    )
-
-
-def add_param_workspace(parser):
-    parser.add_argument(
-        "-w",
-        "--workspace-name",
-        dest="workspace_name",
-        type=str,
-        help=(
-            "Name of the Azure ML workspace. You can configure the default group using \n"
-            "`az configure --defaults workspace=<name>`."
-        ),
     )
 
 
@@ -326,3 +260,62 @@ def add_param_config(parser):
 
 
 logging_params = [add_param_verbose, add_param_debug]
+base_params = logging_params + [
+    add_param_ua,
+]
+
+
+def add_param_archived_only(parser):
+    parser.add_argument(
+        "--archived-only",
+        action="store_true",
+        help="Only list archived records.",
+    )
+
+
+def add_param_include_archived(parser):
+    parser.add_argument(
+        "--include-archived",
+        action="store_true",
+        help="List both archived records and active records.",
+    )
+
+
+def add_param_output_format(parser):
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=CLIListOutputFormat.JSON,
+        help="Output format, accepted values are 'json' and 'table'. Default is 'json'.",
+        choices=[CLIListOutputFormat.TABLE, CLIListOutputFormat.JSON],
+    )
+
+
+def add_param_include_others(parser):
+    parser.add_argument(
+        "--include-others",
+        action="store_true",
+        help="Get records that are owned by all users.",
+    )
+
+
+def add_param_flow_type(parser):
+    parser.add_argument(
+        "--type",
+        type=str,
+        help=(
+            f"The type of the flow. Available values are {FlowType.get_all_values()}. "
+            f"Default to be None, which means all types included."
+        ),
+    )
+
+
+def add_param_flow_name(parser):
+    parser.add_argument(
+        "-n",
+        "--name",
+        type=str,
+        required=True,
+        help="The name of the flow.",
+    )

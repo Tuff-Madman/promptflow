@@ -6,6 +6,7 @@ import glob
 import json
 import os
 import subprocess
+import sys
 from importlib.metadata import version
 from os import PathLike
 from pathlib import Path
@@ -13,30 +14,34 @@ from typing import Dict, Iterable, List, Tuple, Union
 
 import yaml
 
-from promptflow._sdk._constants import CHAT_HISTORY, DEFAULT_ENCODING, LOCAL_MGMT_DB_PATH
+from promptflow._constants import LANGUAGE_KEY, FlowLanguage
+from promptflow._sdk._constants import CHAT_HISTORY, DEFAULT_ENCODING, FLOW_TOOLS_JSON_GEN_TIMEOUT, LOCAL_MGMT_DB_PATH
 from promptflow._sdk._load_functions import load_flow
+from promptflow._sdk._submitter import TestSubmitter
+from promptflow._sdk._submitter.utils import SubmitterHelper
+from promptflow._sdk._telemetry import ActivityType, TelemetryMixin, monitor_operation
 from promptflow._sdk._utils import (
     _get_additional_includes,
     _merge_local_code_and_additional_includes,
     copy_tree_respect_template_and_ignore_file,
+    dump_flow_result,
     dump_yaml,
     generate_flow_tools_json,
     generate_random_string,
     parse_variant,
 )
+from promptflow._sdk.entities._flow import ProtectedFlow
 from promptflow._sdk.entities._validation import ValidationResult
-from promptflow._sdk.operations._run_submitter import remove_additional_includes, variant_overwrite_context
-from promptflow._sdk.operations._test_submitter import TestSubmitter
-from promptflow._telemetry.activity import ActivityType, monitor_operation
 from promptflow._utils.context_utils import _change_working_dir
 from promptflow.exceptions import UserErrorException
 
 
-class FlowOperations:
+class FlowOperations(TelemetryMixin):
     """FlowOperations."""
 
-    def __init__(self):
-        pass
+    def __init__(self, client):
+        self._client = client
+        super().__init__()
 
     @monitor_operation(activity_name="pf.flows.test", activity_type=ActivityType.PUBLICAPI)
     def test(
@@ -71,6 +76,21 @@ class FlowOperations:
         result = self._test(
             flow=flow, inputs=inputs, variant=variant, node=node, environment_variables=environment_variables, **kwargs
         )
+
+        dump_test_result = kwargs.get("dump_test_result", False)
+        if dump_test_result:
+            # Dump flow/node test info
+            flow = load_flow(flow)
+            if node:
+                dump_flow_result(flow_folder=flow.code, node_result=result, prefix=f"flow-{node}.node")
+            else:
+                if variant:
+                    tuning_node, node_variant = parse_variant(variant)
+                    prefix = f"flow-{tuning_node}-{node_variant}"
+                else:
+                    prefix = "flow"
+                dump_flow_result(flow_folder=flow.code, flow_result=result, prefix=prefix)
+
         TestSubmitter._raise_error_when_test_failed(result, show_trace=node is not None)
         return result.output
 
@@ -108,10 +128,37 @@ class FlowOperations:
 
         inputs = inputs or {}
         flow = load_flow(flow)
-        config = kwargs.get("config", None)
-        with TestSubmitter(flow=flow, variant=variant, config=config).init() as submitter:
+        flow.context.variant = variant
+        from promptflow._constants import FlowLanguage
+        from promptflow._sdk._submitter.test_submitter import TestSubmitterViaProxy
+
+        if flow.dag.get(LANGUAGE_KEY, FlowLanguage.Python) == FlowLanguage.CSharp:
+            with TestSubmitterViaProxy(flow=flow, flow_context=flow.context, client=self._client).init() as submitter:
+                is_chat_flow, chat_history_input_name, _ = self._is_chat_flow(submitter.dataplane_flow)
+                flow_inputs, dependency_nodes_outputs = submitter.resolve_data(
+                    node_name=node, inputs=inputs, chat_history_name=chat_history_input_name
+                )
+
+                if node:
+                    return submitter.node_test(
+                        node_name=node,
+                        flow_inputs=flow_inputs,
+                        dependency_nodes_outputs=dependency_nodes_outputs,
+                        environment_variables=environment_variables,
+                        stream=True,
+                    )
+                else:
+                    return submitter.flow_test(
+                        inputs=flow_inputs,
+                        environment_variables=environment_variables,
+                        stream_log=stream_log,
+                        stream_output=stream_output,
+                        allow_generator_output=allow_generator_output and is_chat_flow,
+                    )
+
+        with TestSubmitter(flow=flow, flow_context=flow.context, client=self._client).init() as submitter:
             is_chat_flow, chat_history_input_name, _ = self._is_chat_flow(submitter.dataplane_flow)
-            flow_inputs, dependency_nodes_outputs = submitter._resolve_data(
+            flow_inputs, dependency_nodes_outputs = submitter.resolve_data(
                 node_name=node, inputs=inputs, chat_history_name=chat_history_input_name
             )
 
@@ -162,6 +209,7 @@ class FlowOperations:
             error_msg = "chat_history is required in the inputs of chat flow"
         return is_chat_flow, chat_history_input_name, error_msg
 
+    @monitor_operation(activity_name="pf.flows._chat", activity_type=ActivityType.INTERNALCALL)
     def _chat(
         self,
         flow,
@@ -183,8 +231,8 @@ class FlowOperations:
         from promptflow._sdk._load_functions import load_flow
 
         flow = load_flow(flow)
-        config = kwargs.get("config", None)
-        with TestSubmitter(flow=flow, variant=variant, config=config).init() as submitter:
+        flow.context.variant = variant
+        with TestSubmitter(flow=flow, flow_context=flow.context, client=self._client).init() as submitter:
             is_chat_flow, chat_history_input_name, error_msg = self._is_chat_flow(submitter.dataplane_flow)
             if not is_chat_flow:
                 raise UserErrorException(f"Only support chat flow in interactive mode, {error_msg}.")
@@ -201,6 +249,26 @@ class FlowOperations:
                 environment_variables=environment_variables,
                 show_step_output=kwargs.get("show_step_output", False),
             )
+
+    @monitor_operation(activity_name="pf.flows._chat_with_ui", activity_type=ActivityType.INTERNALCALL)
+    def _chat_with_ui(self, script):
+        try:
+            import bs4  # noqa: F401
+            import streamlit_quill  # noqa: F401
+            from streamlit.web import cli as st_cli
+        except ImportError as ex:
+            raise UserErrorException(
+                f"Please try 'pip install promptflow[executable]' to install dependency, {ex.msg}."
+            )
+        sys.argv = [
+            "streamlit",
+            "run",
+            script,
+            "--global.developmentMode=false",
+            "--client.toolbarMode=viewer",
+            "--browser.gatherUsageStats=false",
+        ]
+        st_cli.main()
 
     def _build_environment_config(self, flow_dag_path: Path):
         flow_info = yaml.safe_load(flow_dag_path.read_text())
@@ -301,6 +369,7 @@ class FlowOperations:
         *,
         output_dir: Path,
     ):
+        from promptflow.batch._csharp_executor_proxy import CSharpExecutorProxy
         from promptflow.contracts.flow import Flow as ExecutableFlow
 
         executable = ExecutableFlow.from_yaml(
@@ -308,10 +377,23 @@ class FlowOperations:
         )
 
         with _change_working_dir(flow_dag_path.parent):
-            return self._migrate_connections(
-                connection_names=executable.get_connection_names(),
-                output_dir=output_dir,
-            )
+            if executable.program_language == FlowLanguage.CSharp:
+                connection_names = SubmitterHelper.resolve_connection_names_from_tool_meta(
+                    tools_meta=CSharpExecutorProxy.generate_tool_metadata(
+                        working_dir=flow_dag_path.parent.absolute(),
+                    ),
+                    flow_dag=executable.serialize(),
+                )
+
+                return self._migrate_connections(
+                    connection_names=connection_names,
+                    output_dir=output_dir,
+                )
+            else:
+                return self._migrate_connections(
+                    connection_names=executable.get_connection_names(),
+                    output_dir=output_dir,
+                )
 
     def _build_flow(
         self,
@@ -322,6 +404,8 @@ class FlowOperations:
         node_variant: str = None,
         update_flow_tools_json: bool = True,
     ):
+        # TODO: confirm if we need to import this
+        from promptflow._sdk._submitter import variant_overwrite_context
 
         flow_copy_target = Path(output)
         flow_copy_target.mkdir(parents=True, exist_ok=True)
@@ -348,6 +432,7 @@ class FlowOperations:
         env_var_names: List[str],
         connection_paths: List[Path],
         flow_name: str,
+        is_csharp_flow: bool = False,
     ):
         (output_dir / "settings.json").write_text(
             data=json.dumps({env_var_name: "" for env_var_name in env_var_names}, indent=2),
@@ -357,8 +442,12 @@ class FlowOperations:
         environment_config = self._build_environment_config(flow_dag_path)
 
         # TODO: make below strings constants
+        if is_csharp_flow:
+            source = Path(__file__).parent.parent / "data" / "docker_csharp"
+        else:
+            source = Path(__file__).parent.parent / "data" / "docker"
         copy_tree_respect_template_and_ignore_file(
-            source=Path(__file__).parent.parent / "data" / "docker",
+            source=source,
             target=output_dir,
             render_context={
                 "env": environment_config,
@@ -377,10 +466,10 @@ class FlowOperations:
         env_var_names: List[str],
     ):
         try:
+            import bs4  # noqa: F401
             import PyInstaller  # noqa: F401
             import streamlit
             import streamlit_quill  # noqa: F401
-            import bs4  # noqa: F401
         except ImportError as ex:
             raise UserErrorException(
                 f"Please try 'pip install promptflow[executable]' to install dependency, {ex.msg}."
@@ -406,12 +495,16 @@ class FlowOperations:
         runtime_interpreter_path = (Path(streamlit.__file__).parent / "runtime").as_posix()
 
         executable = ExecutableFlow.from_yaml(flow_file=Path(flow_dag_path.name), working_dir=flow_dag_path.parent)
-        flow_inputs = {flow_input: (value.default, value.type.value) for flow_input, value in executable.inputs.items()
-                       if not value.is_chat_history}
+        flow_inputs = {
+            flow_input: (value.default, value.type.value)
+            for flow_input, value in executable.inputs.items()
+            if not value.is_chat_history
+        }
         flow_inputs_params = ["=".join([flow_input, flow_input]) for flow_input, _ in flow_inputs.items()]
         flow_inputs_params = ",".join(flow_inputs_params)
 
         is_chat_flow, chat_history_input_name, _ = self._is_chat_flow(executable)
+        label = "Chat" if is_chat_flow else "Run"
         copy_tree_respect_template_and_ignore_file(
             source=Path(__file__).parent.parent / "data" / "executable",
             target=output_dir,
@@ -423,7 +516,8 @@ class FlowOperations:
                 "flow_inputs_params": flow_inputs_params,
                 "flow_path": None,
                 "is_chat_flow": is_chat_flow,
-                "chat_history_input_name": chat_history_input_name
+                "chat_history_input_name": chat_history_input_name,
+                "label": label,
             },
         )
         self._run_pyinstaller(output_dir)
@@ -458,10 +552,11 @@ class FlowOperations:
         :return: no return
         :rtype: None
         """
-        output_dir = Path(output)
+        output_dir = Path(output).absolute()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         flow = load_flow(flow)
+        is_csharp_flow = flow.dag.get(LANGUAGE_KEY, "") == FlowLanguage.CSharp
 
         if format not in ["docker", "executable"]:
             raise ValueError(f"Unsupported export format: {format}")
@@ -482,6 +577,7 @@ class FlowOperations:
             output=output_flow_dir,
             tuning_node=tuning_node,
             node_variant=node_variant,
+            update_flow_tools_json=False if is_csharp_flow else True,
         )
 
         if flow_only:
@@ -500,6 +596,7 @@ class FlowOperations:
                 connection_paths=connection_paths,
                 flow_name=flow.name,
                 env_var_names=env_var_names,
+                is_csharp_flow=is_csharp_flow,
             )
         elif format == "executable":
             self._build_as_executable(
@@ -511,6 +608,9 @@ class FlowOperations:
 
     @contextlib.contextmanager
     def _resolve_additional_includes(cls, flow_dag_path: Path) -> Iterable[Path]:
+        # TODO: confirm if we need to import this
+        from promptflow._sdk._submitter import remove_additional_includes
+
         if _get_additional_includes(flow_dag_path):
             # Merge the flow folder and additional includes to temp folder.
             # TODO: support a flow_dag_path with a name different from flow.dag.yaml
@@ -533,18 +633,18 @@ class FlowOperations:
         :rtype: ValidationResult
         """
 
-        flow = load_flow(source=flow)
+        flow_entity: ProtectedFlow = load_flow(source=flow)
 
         # TODO: put off this if we do path existence check in FlowSchema on fields other than additional_includes
-        validation_result = flow._validate()
+        validation_result = flow_entity._validate()
 
         source_path_mapping = {}
         flow_tools, tools_errors = self._generate_tools_meta(
-            flow=flow.flow_dag_path,
+            flow=flow_entity.flow_dag_path,
             source_path_mapping=source_path_mapping,
         )
 
-        flow.tools_meta_path.write_text(
+        flow_entity.tools_meta_path.write_text(
             data=json.dumps(flow_tools, indent=4),
             encoding=DEFAULT_ENCODING,
         )
@@ -558,21 +658,23 @@ class FlowOperations:
                     )
 
         # flow in control plane is read-only, so resolve location makes sense even in SDK experience
-        validation_result.resolve_location_for_diagnostics(flow.flow_dag_path)
+        validation_result.resolve_location_for_diagnostics(flow_entity.flow_dag_path.as_posix())
 
-        flow._try_raise(
+        flow_entity._try_raise(
             validation_result,
             raise_error=raise_error,
         )
 
         return validation_result
 
+    @monitor_operation(activity_name="pf.flows._generate_tools_meta", activity_type=ActivityType.INTERNALCALL)
     def _generate_tools_meta(
         self,
         flow: Union[str, PathLike],
         *,
         source_name: str = None,
         source_path_mapping: Dict[str, List[str]] = None,
+        timeout: int = FLOW_TOOLS_JSON_GEN_TIMEOUT,
     ) -> Tuple[dict, dict]:
         """Generate flow tools meta for a specific flow or a specific node in the flow.
 
@@ -587,12 +689,14 @@ class FlowOperations:
         :param source_name: source name to generate tools meta. If not specified, generate tools meta for all sources.
         :type source_name: str
         :param source_path_mapping: If passed in None, do nothing; if passed in a dict, will record all reference yaml
-                                    paths for each source.
+                                    paths for each source in the dict passed in.
         :type source_path_mapping: Dict[str, List[str]]
+        :param timeout: timeout for generating tools meta
+        :type timeout: int
         :return: dict of tools meta and dict of tools errors
         :rtype: Tuple[dict, dict]
         """
-        flow = load_flow(source=flow)
+        flow: ProtectedFlow = load_flow(source=flow)
 
         with self._resolve_additional_includes(flow.flow_dag_path) as new_flow_dag_path:
             flow_tools = generate_flow_tools_json(
@@ -603,6 +707,7 @@ class FlowOperations:
                 target_source=source_name,
                 used_packages_only=True,
                 source_path_mapping=source_path_mapping,
+                timeout=timeout,
             )
 
         flow_tools_meta = flow_tools.pop("code", {})

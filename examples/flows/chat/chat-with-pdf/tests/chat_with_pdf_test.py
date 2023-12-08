@@ -2,7 +2,7 @@ import os
 import unittest
 import promptflow
 from base_test import BaseTest
-from promptflow.exceptions import ValidationException
+from promptflow._sdk._errors import InvalidRunStatusError
 
 
 class TestChatWithPDF(BaseTest):
@@ -72,11 +72,10 @@ class TestChatWithPDF(BaseTest):
         self.assertEqual(details.shape[0], 3)
 
     def test_bulk_run_mapping_missing_one_column(self):
-        # in this case, run won't be created because the question column is missed in the data
         data_path = os.path.join(
             self.flow_path, "data/invalid-data-missing-column.jsonl"
         )
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(InvalidRunStatusError):
             self.create_chat_run(
                 column_mapping={
                     "question": "${data.question}",
@@ -85,8 +84,7 @@ class TestChatWithPDF(BaseTest):
             )
 
     def test_bulk_run_invalid_mapping(self):
-        # in this case, run won't be created.
-        with self.assertRaises(ValidationException):
+        with self.assertRaises(InvalidRunStatusError):
             self.create_chat_run(
                 column_mapping={
                     "question": "${data.question_not_exist}",

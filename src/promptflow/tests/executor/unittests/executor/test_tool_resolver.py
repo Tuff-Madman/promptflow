@@ -4,8 +4,10 @@ from pathlib import Path
 from typing import List
 
 import pytest
+from jinja2 import TemplateSyntaxError
 
 from promptflow._core.tools_manager import ToolLoader
+from promptflow._internal import tool
 from promptflow._sdk.entities import CustomConnection, CustomStrongTypeConnection
 from promptflow.connections import AzureOpenAIConnection
 from promptflow.contracts.flow import InputAssignment, InputValueType, Node, ToolSource, ToolSourceType
@@ -32,6 +34,13 @@ WRONG_REQUESTS_PATH = TEST_ROOT / "test_configs/executor_wrong_requests"
 class MyFirstCSTConnection(CustomStrongTypeConnection):
     api_key: Secret
     api_base: str
+
+
+@tool(streaming_option_parameter="stream_enabled")
+def mock_package_func(prompt: PromptTemplate, **kwargs):
+    from promptflow.tools.template_rendering import render_template_jinja2
+
+    return render_template_jinja2(prompt, **kwargs)
 
 
 @pytest.mark.unittest
@@ -153,6 +162,22 @@ class TestToolResolver:
         assert isinstance(exec_info.value.inner_exception, NodeInputValidationError)
         assert "These inputs are duplicated" in exec_info.value.message
 
+    def test_resolve_tool_by_node_with_invalid_template(self, resolver, mocker):
+        node = mocker.Mock(tool=None, inputs={})
+        node.name = "node"
+        node.type = ToolType.PROMPT
+        mocker.patch.object(resolver, "_load_source_content", return_value="{{current context}}")
+
+        with pytest.raises(ResolveToolError) as exec_info:
+            resolver.resolve_tool_by_node(node)
+
+        assert isinstance(exec_info.value.inner_exception, TemplateSyntaxError)
+        expected_message = (
+            "Tool load failed in 'node': Jinja parsing failed at line 1: "
+            "(TemplateSyntaxError) expected token 'end of print statement', got 'context'"
+        )
+        assert expected_message in exec_info.value.message
+
     def test_ensure_node_inputs_type(self):
         # Case 1: conn_name not in connections, should raise conn_name not found error
         tool = Tool(name="mock", type="python", inputs={"conn": InputDefinition(type=["CustomConnection"])})
@@ -185,6 +210,21 @@ class TestToolResolver:
         with pytest.raises(ValueTypeUnresolved):
             tool_resolver = ToolResolver(working_dir=None, connections=connections)
             tool_resolver._convert_node_literal_input_types(node, tool)
+
+        # Case 5: Literal value, invalid image in list
+        tool = Tool(name="mock", type="python", inputs={"list_input": InputDefinition(type=[ValueType.LIST])})
+        invalid_image = {"data:image/jpg;base64": "invalid_image"}
+        node = Node(
+            name="mock",
+            tool=tool,
+            inputs={"list_input": InputAssignment(value=[invalid_image], value_type=InputValueType.LITERAL)},
+        )
+        connections = {}
+        with pytest.raises(NodeInputValidationError) as e:
+            tool_resolver = ToolResolver(working_dir=None, connections=connections)
+            tool_resolver._convert_node_literal_input_types(node, tool)
+        message = "Invalid base64 image"
+        assert message in str(e.value), "Expected: {}, Actual: {}".format(message, str(e.value))
 
     def test_resolve_llm_connection_to_inputs(self):
         # Case 1: node.connection is not specified
@@ -285,7 +325,7 @@ class TestToolResolver:
             inputs={
                 "conn": InputAssignment(value="conn_name", value_type=InputValueType.LITERAL),
                 "text": InputAssignment(value="Hello World!", value_type=InputValueType.LITERAL),
-                "image": InputAssignment(value=str(DATA_ROOT / "test_image.jpg"), value_type=InputValueType.LITERAL),
+                "image": InputAssignment(value=str(DATA_ROOT / "logo.jpg"), value_type=InputValueType.LITERAL),
             },
             connection="conn_name",
             provider="mock",
@@ -333,11 +373,6 @@ class TestToolResolver:
         assert resolved_tool.callable(**kwargs) == "Hello World!"
 
     def test_resolve_package_node(self, mocker):
-        def mock_package_func(prompt: PromptTemplate, **kwargs):
-            from promptflow.tools.template_rendering import render_template_jinja2
-
-            return render_template_jinja2(prompt, **kwargs)
-
         tool_loader = ToolLoader(working_dir=None)
         tool = Tool(name="mock", type=ToolType.PYTHON, inputs={"conn": InputDefinition(type=["AzureOpenAIConnection"])})
         mocker.patch.object(tool_loader, "load_tool_for_package_node", return_value=tool)
@@ -368,11 +403,6 @@ class TestToolResolver:
         assert resolved_tool.callable(**kwargs) == "Hello World!"
 
     def test_integrate_prompt_in_package_node(self, mocker):
-        def mock_package_func(prompt: PromptTemplate, **kwargs):
-            from promptflow.tools.template_rendering import render_template_jinja2
-
-            return render_template_jinja2(prompt, **kwargs)
-
         tool_resolver = ToolResolver(working_dir=None, connections={})
         mocker.patch.object(
             tool_resolver,
@@ -389,7 +419,9 @@ class TestToolResolver:
             provider="mock",
         )
         resolved_tool = ResolvedTool(node=node, callable=mock_package_func, definition=tool, init_args=None)
-        resolved_tool = tool_resolver._integrate_prompt_in_package_node(node, resolved_tool)
+        assert resolved_tool.callable._streaming_option_parameter == "stream_enabled"
+        resolved_tool = tool_resolver._integrate_prompt_in_package_node(resolved_tool)
+        assert resolved_tool.callable._streaming_option_parameter == "stream_enabled"
         kwargs = {k: v.value for k, v in resolved_tool.node.inputs.items()}
         assert resolved_tool.callable(**kwargs) == "Hello World!"
 

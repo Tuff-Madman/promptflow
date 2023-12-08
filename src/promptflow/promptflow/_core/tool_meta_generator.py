@@ -14,6 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 from traceback import TracebackException
 
+from jinja2 import TemplateSyntaxError
 from jinja2.environment import COMMENT_END_STRING, COMMENT_START_STRING
 
 from promptflow._core._errors import MetaFileNotFound, MetaFileReadError, NotSupported
@@ -36,13 +37,24 @@ def generate_prompt_tool(name, content, prompt_only=False, source=None):
     tool_type = ToolType.PROMPT if prompt_only else ToolType.LLM
     try:
         inputs = get_inputs_for_prompt_template(content)
+    except TemplateSyntaxError as e:
+        error_type_and_message = f"({e.__class__.__name__}) {e}"
+        raise JinjaParsingError(
+            message_format=(
+                "Generate tool meta failed for {tool_type} tool. Jinja parsing failed at line {line_number}: "
+                "{error_type_and_message}"
+            ),
+            tool_type=tool_type.value,
+            line_number=e.lineno,
+            error_type_and_message=error_type_and_message,
+        ) from e
     except Exception as e:
         error_type_and_message = f"({e.__class__.__name__}) {e}"
         raise JinjaParsingError(
             message_format=(
                 "Generate tool meta failed for {tool_type} tool. Jinja parsing failed: {error_type_and_message}"
             ),
-            tool_type=tool_type,
+            tool_type=tool_type.value,
             error_type_and_message=error_type_and_message,
         ) from e
 
@@ -130,13 +142,24 @@ def collect_tool_methods_with_init_inputs_in_module(m):
     return tools
 
 
-def _parse_tool_from_function(f, initialize_inputs=None, gen_custom_type_conn=False):
+def _parse_tool_from_function(f, initialize_inputs=None, gen_custom_type_conn=False, skip_prompt_template=False):
+    try:
+        tool_type = getattr(f, "__type") or ToolType.PYTHON
+    except Exception as e:
+        raise e
+    tool_name = getattr(f, "__name")
+    description = getattr(f, "__description")
     if hasattr(f, "__tool") and isinstance(f.__tool, Tool):
         return f.__tool
     if hasattr(f, "__original_function"):
         f = f.__original_function
     try:
-        inputs, _, _ = function_to_interface(f, initialize_inputs, gen_custom_type_conn=gen_custom_type_conn)
+        inputs, _, _, enable_kwargs = function_to_interface(
+            f,
+            initialize_inputs=initialize_inputs,
+            gen_custom_type_conn=gen_custom_type_conn,
+            skip_prompt_template=skip_prompt_template,
+        )
     except Exception as e:
         error_type_and_message = f"({e.__class__.__name__}) {e}"
         raise BadFunctionInterface(
@@ -149,13 +172,14 @@ def _parse_tool_from_function(f, initialize_inputs=None, gen_custom_type_conn=Fa
         class_name = f.__qualname__.replace(f".{f.__name__}", "")
     # Construct the Tool structure
     return Tool(
-        name=f.__qualname__,
-        description=inspect.getdoc(f),
+        name=tool_name or f.__qualname__,
+        description=description or inspect.getdoc(f),
         inputs=inputs,
-        type=ToolType.PYTHON,
+        type=tool_type,
         class_name=class_name,
         function=f.__name__,
         module=f.__module__,
+        enable_kwargs=enable_kwargs,
     )
 
 
@@ -239,7 +263,7 @@ def collect_tool_function_in_module(m):
 def generate_python_tool(name, content, source=None):
     m = load_python_module(content, source)
     f, initialize_inputs = collect_tool_function_in_module(m)
-    tool = _parse_tool_from_function(f, initialize_inputs)
+    tool = _parse_tool_from_function(f, initialize_inputs=initialize_inputs)
     tool.module = None
     if name is not None:
         tool.name = name
@@ -271,7 +295,7 @@ def generate_tool_meta_dict_by_file(path: str, tool_type: ToolType):
     if not file.is_file():
         raise MetaFileNotFound(
             message_format="Generate tool meta failed for {tool_type} tool. Meta file '{file_path}' can not be found.",
-            tool_type=tool_type,
+            tool_type=tool_type.value,
             file_path=str(file),
         )
     try:
@@ -283,7 +307,7 @@ def generate_tool_meta_dict_by_file(path: str, tool_type: ToolType):
                 "Generate tool meta failed for {tool_type} tool. "
                 "Read meta file '{file_path}' failed: {error_type_and_message}"
             ),
-            tool_type=tool_type,
+            tool_type=tool_type.value,
             file_path=str(file),
             error_type_and_message=error_type_and_message,
         ) from e
@@ -302,7 +326,7 @@ def generate_tool_meta_dict_by_file(path: str, tool_type: ToolType):
                 "The type '{tool_type}' is currently unsupported. "
                 "Please choose from available types: {supported_tool_types} and try again."
             ),
-            tool_type=tool_type,
+            tool_type=tool_type.value,
             supported_tool_types=",".join([ToolType.PYTHON, ToolType.LLM, ToolType.PROMPT]),
         )
 

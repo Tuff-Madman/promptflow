@@ -3,7 +3,7 @@
 # ---------------------------------------------------------
 
 import inspect
-import logging
+import json
 import shutil
 from abc import ABC, abstractmethod
 from ast import literal_eval
@@ -13,10 +13,12 @@ from pathlib import Path
 from jinja2 import Environment, Template, meta
 
 from promptflow._sdk._constants import LOGGER_NAME
-from promptflow.contracts.flow import Flow as ExecutableFlow
 from promptflow._sdk.operations._flow_operations import FlowOperations
+from promptflow._utils.logger_utils import LoggerFactory
+from promptflow.contracts.flow import Flow as ExecutableFlow
+from promptflow.exceptions import UserErrorException
 
-logger = logging.getLogger(LOGGER_NAME)
+logger = LoggerFactory.get_logger(LOGGER_NAME)
 TEMPLATE_PATH = Path(__file__).parent.parent / "data" / "entry_flow"
 CHAT_FLOW_TEMPLATE_PATH = Path(__file__).parent.parent / "data" / "chat_flow" / "template"
 TOOL_TEMPLATE_PATH = Path(__file__).parent.parent / "data" / "package_tool"
@@ -222,28 +224,39 @@ class FlowMetaYamlGenerator(BaseGenerator):
         return ["flow_name"]
 
 
-class StreamlitFileGenerator(BaseGenerator):
+class StreamlitFileReplicator:
     def __init__(self, flow_name, flow_dag_path):
         self.flow_name = flow_name
         self.flow_dag_path = Path(flow_dag_path)
         self.executable = ExecutableFlow.from_yaml(
             flow_file=Path(self.flow_dag_path.name), working_dir=self.flow_dag_path.parent
         )
-        self.is_chat_flow, self.chat_history_input_name, _ = FlowOperations._is_chat_flow(self.executable)
+        self.is_chat_flow, self.chat_history_input_name, error_msg = FlowOperations._is_chat_flow(self.executable)
 
     @property
     def flow_inputs(self):
-        return {flow_input: (value.default, value.type.value) for flow_input, value in self.executable.inputs.items()
-                if not value.is_chat_history}
+        if self.is_chat_flow:
+            results = {}
+            for flow_input, value in self.executable.inputs.items():
+                if value.is_chat_input:
+                    if value.type.value not in [ValueType.STRING.value, ValueType.LIST.value]:
+                        raise UserErrorException(
+                            f"Only support string or list type for chat input, but got {value.type.value}."
+                        )
+                    results.update({flow_input: (value.default, value.type.value)})
+        else:
+            results = {
+                flow_input: (value.default, value.type.value) for flow_input, value in self.executable.inputs.items()
+            }
+        return results
 
     @property
-    def flow_inputs_params(self):
-        flow_inputs_params = ["=".join([flow_input, flow_input]) for flow_input, _ in self.flow_inputs.items()]
-        return ",".join(flow_inputs_params)
+    def label(self):
+        return "Chat" if self.is_chat_flow else "Run"
 
     @property
-    def tpl_file(self):
-        return SERVE_TEMPLATE_PATH / "main.py.jinja2"
+    def py_file(self):
+        return SERVE_TEMPLATE_PATH / "main.py"
 
     @property
     def flow_path(self):
@@ -251,8 +264,24 @@ class StreamlitFileGenerator(BaseGenerator):
 
     @property
     def entry_template_keys(self):
-        return ["flow_name", "flow_inputs", "flow_inputs_params", "flow_path", "is_chat_flow",
-                "chat_history_input_name"]
+        return [
+            "flow_name",
+            "flow_path",
+            "is_chat_flow",
+            "chat_history_input_name",
+            "flow_inputs",
+            "label",
+        ]
+
+    def generate_to_file(self, target):
+        if Path(target).name == "main.py":
+            target = Path(target).resolve()
+            shutil.copy(self.py_file, target)
+            config_content = {key: getattr(self, key) for key in self.entry_template_keys}
+            with open(target.parent / "config.json", "w") as file:
+                json.dump(config_content, file, indent=4)
+        else:
+            shutil.copy(SERVE_TEMPLATE_PATH / Path(target).name, target)
 
 
 class ChatFlowDAGGenerator(BaseGenerator):
@@ -295,12 +324,14 @@ class OpenAIConnectionGenerator(BaseGenerator):
         return ["connection"]
 
 
-def copy_extra_files(flow_path, extra_files):
+def copy_extra_files(flow_path, extra_files, overwrite=False):
     for file_name in extra_files:
         extra_file_path = (
             Path(__file__).parent.parent / "data" / "entry_flow" / EXTRA_FILES_MAPPING.get(file_name, file_name)
         )
         target_path = Path(flow_path) / file_name
+        if target_path.exists() and not overwrite:
+            continue
         action = "Overwriting" if target_path.exists() else "Creating"
         print(f"{action} {target_path.resolve()}...")
         shutil.copy2(extra_file_path, target_path)

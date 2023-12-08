@@ -5,8 +5,8 @@
 import argparse
 import importlib
 import json
-import logging
 import os
+import subprocess
 import sys
 import tempfile
 import webbrowser
@@ -16,35 +16,35 @@ from promptflow._cli._params import (
     add_param_config,
     add_param_entry,
     add_param_environment_variables,
-    add_param_flow_name,
+    add_param_flow_display_name,
     add_param_function,
     add_param_inputs,
     add_param_prompt_template,
     add_param_source,
     add_param_yes,
     add_parser_build,
-    logging_params,
+    base_params,
 )
 from promptflow._cli._pf._init_entry_generators import (
     AzureOpenAIConnectionGenerator,
     ChatFlowDAGGenerator,
     FlowDAGGenerator,
     OpenAIConnectionGenerator,
-    StreamlitFileGenerator,
+    StreamlitFileReplicator,
     ToolMetaGenerator,
     ToolPyGenerator,
     copy_extra_files,
 )
 from promptflow._cli._pf._run import exception_handler
 from promptflow._cli._utils import _copy_to_flow, activate_action, confirm, inject_sys_path, list_of_dict_to_dict
+from promptflow._constants import LANGUAGE_KEY, FlowLanguage
 from promptflow._sdk._constants import LOGGER_NAME, PROMPT_FLOW_DIR_NAME, ConnectionProvider
 from promptflow._sdk._pf_client import PFClient
-from promptflow._sdk._utils import dump_flow_result
-from promptflow.exceptions import UserErrorException
+from promptflow._utils.logger_utils import LoggerFactory
 
 DEFAULT_CONNECTION = "open_ai_connection"
 DEFAULT_DEPLOYMENT = "gpt-35-turbo"
-logger = logging.getLogger(LOGGER_NAME)
+logger = LoggerFactory.get_logger(LOGGER_NAME)
 
 
 def add_flow_parser(subparsers):
@@ -69,11 +69,6 @@ def dispatch_flow_commands(args: argparse.Namespace):
     elif args.sub_action == "test":
         test_flow(args)
     elif args.sub_action == "serve":
-        if (hasattr(args, "verbose") and args.verbose) or (hasattr(args, "debug") and args.debug):
-            pass
-        else:
-            for handler in logging.getLogger(LOGGER_NAME).handlers:
-                handler.setLevel(logging.INFO)
         serve_flow(args)
     elif args.sub_action == "build":
         build_flow(args)
@@ -110,13 +105,13 @@ pf flow init --flow intent_copilot --entry intent.py --function extract_intent -
     add_params = [
         add_param_type,
         add_param_yes,
-        add_param_flow_name,
+        add_param_flow_display_name,
         add_param_entry,
         add_param_function,
         add_param_prompt_template,
         add_param_connection,
         add_param_deployment,
-    ] + logging_params
+    ] + base_params
     activate_action(
         name="init",
         description="Creating a flow folder with code/prompts and yaml definitions of the flow.",
@@ -159,7 +154,7 @@ pf flow serve --source <path_to_flow> --port 8080 --host localhost --environment
             add_param_environment_variables,
             add_param_config,
         ]
-        + logging_params,
+        + base_params,
         subparsers=subparsers,
         help_message="Serving a flow as an endpoint.",
         action_param_name="sub_action",
@@ -218,6 +213,7 @@ pf flow test --flow my-awesome-flow --node node_name --interactive
     add_param_multi_modal = lambda parser: parser.add_argument(  # noqa: E731
         "--multi-modal", action="store_true", help=argparse.SUPPRESS
     )
+    add_param_ui = lambda parser: parser.add_argument("--ui", action="store_true", help=argparse.SUPPRESS)  # noqa: E731
     add_param_input = lambda parser: parser.add_argument("--input", type=str, help=argparse.SUPPRESS)  # noqa: E731
 
     add_params = [
@@ -229,8 +225,9 @@ pf flow test --flow my-awesome-flow --node node_name --interactive
         add_param_inputs,
         add_param_environment_variables,
         add_param_multi_modal,
+        add_param_ui,
         add_param_config,
-    ] + logging_params
+    ] + base_params
     activate_action(
         name="test",
         description="Test the flow.",
@@ -290,7 +287,7 @@ def _init_existing_flow(flow_name, entry=None, function=None, prompt_params: dic
     tools.generate_to_file(meta_dir / "flow.tools.json")
     # Create flow.dag.yaml
     FlowDAGGenerator(tool_py, function, function_obj, prompt_params).generate_to_file("flow.dag.yaml")
-    copy_extra_files(flow_path=flow_path, extra_files=[".gitignore"])
+    copy_extra_files(flow_path=flow_path, extra_files=["requirements.txt", ".gitignore"])
     print(f"Done. Generated flow in folder: {flow_path.resolve()}.")
 
 
@@ -362,8 +359,6 @@ def _init_flow_by_template(flow_name, flow_type, overwrite=False, connection=Non
 @exception_handler("Flow test")
 def test_flow(args):
     from promptflow._sdk._load_functions import load_flow
-    from promptflow._sdk._utils import parse_variant
-    from promptflow._sdk.operations._test_submitter import TestSubmitter
 
     config = list_of_dict_to_dict(args.config)
     pf_client = PFClient(config=config)
@@ -382,21 +377,22 @@ def test_flow(args):
     if args.inputs:
         inputs.update(list_of_dict_to_dict(args.inputs))
 
-    if args.multi_modal:
+    if args.multi_modal or args.ui:
         with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                from streamlit.web import cli as st_cli
-                import streamlit_quill  # noqa: F401
-                import bs4  # noqa: F401
-            except ImportError as ex:
-                raise UserErrorException(
-                    f"Please try 'pip install promptflow[executable]' to install dependency, {ex.msg}."
-                )
             flow = load_flow(args.flow)
-            script_path = os.path.join(temp_dir, "main.py")
-            StreamlitFileGenerator(flow_name=flow.name, flow_dag_path=flow.flow_dag_path).generate_to_file(script_path)
-            sys.argv = ["streamlit", "run", script_path, "--global.developmentMode=false"]
-            st_cli.main()
+
+            script_path = [
+                os.path.join(temp_dir, "main.py"),
+                os.path.join(temp_dir, "utils.py"),
+                os.path.join(temp_dir, "logo.png"),
+            ]
+            for script in script_path:
+                StreamlitFileReplicator(
+                    flow_name=flow.display_name if flow.display_name else flow.name,
+                    flow_dag_path=flow.flow_dag_path,
+                ).generate_to_file(script)
+            main_script_path = os.path.join(temp_dir, "main.py")
+            pf_client.flows._chat_with_ui(script=main_script_path)
     else:
         if args.interactive:
             pf_client.flows._chat(
@@ -405,56 +401,80 @@ def test_flow(args):
                 environment_variables=environment_variables,
                 variant=args.variant,
                 show_step_output=args.verbose,
-                config=config,
             )
         else:
-            result = pf_client.flows._test(
+            result = pf_client.flows.test(
                 flow=args.flow,
                 inputs=inputs,
                 environment_variables=environment_variables,
                 variant=args.variant,
                 node=args.node,
                 allow_generator_output=False,
-                config=config,
                 stream_output=False,
+                dump_test_result=True,
             )
-            # Dump flow/node test info
-            flow = load_flow(args.flow)
-            if args.node:
-                dump_flow_result(flow_folder=flow.code, node_result=result, prefix=f"flow-{args.node}.node")
-            else:
-                if args.variant:
-                    tuning_node, node_variant = parse_variant(args.variant)
-                    prefix = f"flow-{tuning_node}-{node_variant}"
-                else:
-                    prefix = "flow"
-                dump_flow_result(flow_folder=flow.code, flow_result=result, prefix=prefix)
-
-            TestSubmitter._raise_error_when_test_failed(result, show_trace=args.node is not None)
             # Print flow/node test result
-            if isinstance(result.output, dict):
-                print(json.dumps(result.output, indent=4))
+            if isinstance(result, dict):
+                print(json.dumps(result, indent=4, ensure_ascii=False))
             else:
-                print(result.output)
+                print(result)
 
 
 def serve_flow(args):
+    from promptflow._sdk._load_functions import load_flow
+
     logger.info("Start serve model: %s", args.source)
     # Set environment variable for local test
     source = Path(args.source)
+    logger.info(
+        "Start promptflow server with port %s",
+        args.port,
+    )
     os.environ["PROMPTFLOW_PROJECT_PATH"] = source.absolute().as_posix()
+    flow = load_flow(args.source)
+    if flow.dag.get(LANGUAGE_KEY, FlowLanguage.Python) == FlowLanguage.CSharp:
+        serve_flow_csharp(args, source)
+    else:
+        serve_flow_python(args, source)
+    logger.info("Promptflow app ended")
+
+
+def serve_flow_csharp(args, source):
+    from promptflow.batch._csharp_executor_proxy import EXECUTOR_SERVICE_DLL
+
+    try:
+        # Change working directory to model dir
+        logger.info(f"Change working directory to model dir {source}")
+        os.chdir(source)
+        command = [
+            "dotnet",
+            EXECUTOR_SERVICE_DLL,
+            "--port",
+            str(args.port),
+            "--yaml_path",
+            "flow.dag.yaml",
+            "--assembly_folder",
+            ".",
+            "--connection_provider_url",
+            "",
+            "--log_path",
+            "",
+            "--serving",
+        ]
+        subprocess.run(command, stdout=sys.stdout, stderr=sys.stderr)
+    except KeyboardInterrupt:
+        pass
+
+
+def serve_flow_python(args, source):
     from promptflow._sdk._serving.app import create_app
 
     static_folder = args.static_folder
     if static_folder:
         static_folder = Path(static_folder).absolute().as_posix()
-    logger.info(
-        "Start promptflow server with port %s",
-        args.port,
-    )
     config = list_of_dict_to_dict(args.config)
     # Change working directory to model dir
-    print(f"Change working directory to model dir {source}")
+    logger.info(f"Change working directory to model dir {source}")
     os.chdir(source)
     app = create_app(
         static_folder=static_folder,
@@ -462,11 +482,10 @@ def serve_flow(args):
         config=config,
     )
     target = f"http://{args.host}:{args.port}"
-    print(f"Opening browser {target}...")
+    logger.info(f"Opening browser {target}...")
     webbrowser.open(target)
     # Debug is not supported for now as debug will rerun command, and we changed working directory.
     app.run(port=args.port, host=args.host)
-    logger.info("Promptflow app ended")
 
 
 def build_flow(args):

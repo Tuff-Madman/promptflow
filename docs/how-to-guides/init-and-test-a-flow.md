@@ -36,7 +36,7 @@ pf flow init --flow <flow-name> --type chat
 Use VS Code explorer pane > directory icon > right click > the "New flow in this directory" action. Follow the popped out dialog to initialize your flow in the target folder.
 ![img](../media/how-to-guides/init-and-test-a-flow/vscode_new_flow_1.png)
 
-Alternatively, you can use the "Create new flow" action on the Prompt flow pane > quick access section to create a new flow
+Alternatively, you can use the "Create new flow" action on the prompt flow pane > quick access section to create a new flow
 ![img](../media/how-to-guides/init-and-test-a-flow/vscode_new_flow_2.png)
 
 :::
@@ -66,7 +66,7 @@ Take [customer-intent-extraction](https://github.com/microsoft/promptflow/tree/m
 
 ![init_output](../media/how-to-guides/init-and-test-a-flow/flow_init_output.png)
 
-In this case, promptflow CLI generates `flow.dag.json`, `.promptflow/tools.json`  and `extract_intent_tool.py`, it is a python tool in the flow.
+In this case, promptflow CLI generates `flow.dag.yaml`, `.promptflow/flow.tools.json`  and `extract_intent_tool.py`, it is a python tool in the flow.
 
 ![init_files](../media/how-to-guides/init-and-test-a-flow/flow_init_files.png)
 ## Test a flow
@@ -77,7 +77,7 @@ Testing flow will NOT create a batch run record, therefore it's unable to use co
 
 Promptflow also provides ways to test the initialized flow or flow node. It will help you quickly test your flow.
 
-### Visual editor on the VS Code for Prompt flow.
+### Visual editor on the VS Code for prompt flow.
 
 ::::{tab-set}
 :::{tab-item} VS Code Extension
@@ -203,7 +203,7 @@ The log and result of flow node test will be displayed in the terminal. And the 
 :::{tab-item} VS Code Extension
 :sync: VS Code Extension
 
-The Prompt flow extension provides inline actions in both default yaml editor and visual editor to trigger single node runs.
+The prompt flow extension provides inline actions in both default yaml editor and visual editor to trigger single node runs.
 
 ![img](../media/how-to-guides/vscode_single_node_test.png)
 ![img](../media/how-to-guides/vscode_single_node_test_visual.png)
