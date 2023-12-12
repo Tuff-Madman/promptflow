@@ -435,12 +435,12 @@ class FlowExecutor:
         ]
         has_line_number = len(line_number) > 0
         if not has_line_number:
-            line_number = [i for i in range(nlines)]
+            line_number = list(range(nlines))
 
         # TODO: Such scenario only occurs in legacy scenarios, will be deprecated.
         has_duplicates = len(line_number) != len(set(line_number))
         if has_duplicates:
-            line_number = [i for i in range(nlines)]
+            line_number = list(range(nlines))
 
         result_list = []
 
@@ -721,13 +721,12 @@ class FlowExecutor:
     def _get_node_referenced_flow_inputs(
         node, flow_inputs: Dict[str, FlowInputDefinition]
     ) -> Dict[str, FlowInputDefinition]:
-        node_referenced_flow_inputs = {}
-        for _, value in node.inputs.items():
-            # Only add flow input to node_referenced_flow_inputs when it is exist and referenced by node.
-            # If flow input is not exist, we will raise exception in FlowValidator.convert_flow_inputs_for_node.
-            if value.value_type == InputValueType.FLOW_INPUT and value.value in flow_inputs:
-                node_referenced_flow_inputs[value.value] = flow_inputs[value.value]
-        return node_referenced_flow_inputs
+        return {
+            value.value: flow_inputs[value.value]
+            for _, value in node.inputs.items()
+            if value.value_type == InputValueType.FLOW_INPUT
+            and value.value in flow_inputs
+        }
 
     def _exec(
         self,

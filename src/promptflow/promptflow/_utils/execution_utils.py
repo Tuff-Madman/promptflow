@@ -20,11 +20,11 @@ def handle_line_failures(run_infos: List[FlowRunInfo], raise_on_line_failure: bo
     """Handle line failures in batch run"""
     failed = [i for i, r in enumerate(run_infos) if r.status == Status.Failed]
     failed_msg = None
-    if len(failed) > 0:
+    if failed:
         failed_indexes = ",".join([str(i) for i in failed])
         first_fail_exception = run_infos[failed[0]].error["message"]
         if raise_on_line_failure:
-            failed_msg = "Flow run failed due to the error: " + first_fail_exception
+            failed_msg = f"Flow run failed due to the error: {first_fail_exception}"
             raise Exception(failed_msg)
 
         failed_msg = (
@@ -46,7 +46,7 @@ def get_aggregation_inputs_properties(flow: Flow) -> AbstractSet[str]:
         if node.name in normal_node_names:
             continue
         for value in node.inputs.values():
-            if not value.value_type == InputValueType.NODE_REFERENCE:
+            if value.value_type != InputValueType.NODE_REFERENCE:
                 continue
             if value.value in normal_node_names:
                 properties.add(value.serialize())

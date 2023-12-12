@@ -77,7 +77,7 @@ class BulkRunException(PromptflowException):
 
         message = f"First error message is: {message}"
         if isinstance(failed_lines, int) and isinstance(total_lines, int):
-            message = f"Failed to run {failed_lines}/{total_lines} lines. " + message
+            message = f"Failed to run {failed_lines}/{total_lines} lines. {message}"
         super().__init__(message=message, target=ErrorTarget.RUNTIME, module=module, **kwargs)
 
     @property

@@ -92,8 +92,7 @@ class FlowContextResolver:
         # validate connection objs
         connections = {}
         for key, connection_obj in flow_context._connection_objs.items():
-            scrubbed_secrets = connection_obj._get_scrubbed_secrets()
-            if scrubbed_secrets:
+            if scrubbed_secrets := connection_obj._get_scrubbed_secrets():
                 raise UserErrorException(
                     f"Connection {connection_obj} contains scrubbed secrets with key {scrubbed_secrets.keys()}, "
                     "please make sure connection has decrypted secrets to use in flow execution. "
@@ -107,9 +106,8 @@ class FlowContextResolver:
         connections = self._resolve_connection_objs(flow_context=flow_context)
         # use updated flow dag to create new flow object for invoker
         resolved_flow = Flow(code=self.working_dir, dag=self.flow_dag)
-        invoker = FlowInvoker(
+        return FlowInvoker(
             flow=resolved_flow,
             connections=connections,
             streaming=flow_context.streaming,
         )
-        return invoker

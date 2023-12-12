@@ -36,10 +36,7 @@ class ConnectionCategory(str, Enum):
 
 
 def get_case_insensitive_key(d, key, default=None):
-    for k, v in d.items():
-        if k.lower() == key.lower():
-            return v
-    return default
+    return next((v for k, v in d.items() if k.lower() == key.lower()), default)
 
 
 class ArmConnectionOperations(_ScopeDependentOperations):
@@ -109,9 +106,7 @@ class ArmConnectionOperations(_ScopeDependentOperations):
                 reason=response.reason,
             )
         data = response.json()
-        if model:
-            return model.deserialize(data)
-        return data
+        return model.deserialize(data) if model else data
 
     @classmethod
     def validate_and_fallback_connection_type(cls, name, type_name, category, metadata):

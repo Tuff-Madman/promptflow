@@ -76,13 +76,12 @@ class PromptflowException(Exception):
             return {}
 
         required_arguments = self.get_arguments_from_message_format(self.message_format)
-        parameters = {}
-        for argument in required_arguments:
-            if argument not in self._kwargs:
-                parameters[argument] = f"<{argument}>"
-            else:
-                parameters[argument] = self._kwargs[argument]
-        return parameters
+        return {
+            argument: f"<{argument}>"
+            if argument not in self._kwargs
+            else self._kwargs[argument]
+            for argument in required_arguments
+        }
 
     @cached_property
     def serializable_message_parameters(self):
@@ -124,10 +123,7 @@ class PromptflowException(Exception):
         # However, in earlier Python versions, the __str__ method returns the value of the enumeration member.
         # Therefore, when dealing with this situation, we need to make some additional adjustments.
         target = self.target.value if isinstance(self.target, ErrorTarget) else self.target
-        if self.module:
-            return f"{target}/{self.module}"
-        else:
-            return target
+        return f"{target}/{self.module}" if self.module else target
 
     @property
     def inner_exception(self):

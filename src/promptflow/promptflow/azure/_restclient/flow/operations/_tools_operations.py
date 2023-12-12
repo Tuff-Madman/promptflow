@@ -361,7 +361,7 @@ class ToolsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_tool_setting_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -381,10 +381,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('ToolSetting', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_tool_setting.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/setting'}  # type: ignore
 
@@ -417,7 +414,7 @@ class ToolsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_samples_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -437,10 +434,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('{Tool}', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_samples.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/samples'}  # type: ignore
 
@@ -521,10 +515,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('str', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_tool_meta.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/meta'}  # type: ignore
 
@@ -596,10 +587,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('ToolMetaDto', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_tool_meta_v2.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/meta-v2'}  # type: ignore
 
@@ -638,7 +626,7 @@ class ToolsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_package_tools_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -660,10 +648,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('{Tool}', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_package_tools.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/packageTools'}  # type: ignore
 
@@ -735,10 +720,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('[object]', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_dynamic_list.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/dynamicList'}  # type: ignore
 
@@ -810,10 +792,7 @@ class ToolsOperations(object):
 
         deserialized = self._deserialize('ToolFuncResponse', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     retrieve_tool_func_result.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/Tools/RetrieveToolFuncResult'}  # type: ignore
 

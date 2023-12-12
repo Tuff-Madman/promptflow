@@ -91,7 +91,7 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
     def _index_service_endpoint_url(self):
         """Get the endpoint url for the workspace."""
         endpoint = self._service_caller._service_endpoint
-        return endpoint + "index/v1.0" + self._service_caller._common_azure_url_pattern
+        return f"{endpoint}index/v1.0{self._service_caller._common_azure_url_pattern}"
 
     def _get_flow_portal_url_from_resource_id(self, flow_resource_id: str):
         """Get the portal url for the run."""
@@ -104,13 +104,14 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
 
     def _get_flow_portal_url_from_index_entity(self, entity: Dict):
         """Enrich the index entity with flow portal url."""
-        result = None
         experiment_id = entity["properties"].get("experimentId", None)
         flow_id = entity["properties"].get("flowId", None)
 
-        if experiment_id and flow_id:
-            result = self._get_flow_portal_url(experiment_id, flow_id)
-        return result
+        return (
+            self._get_flow_portal_url(experiment_id, flow_id)
+            if experiment_id and flow_id
+            else None
+        )
 
     def _get_flow_portal_url(self, experiment_id, flow_id):
         """Get the portal url for the run."""
@@ -287,13 +288,12 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
             "description": description,
             "tags": tags,
         }
-        rest_flow_result = self._service_caller.create_flow(
+        return self._service_caller.create_flow(
             subscription_id=self._operation_scope.subscription_id,
             resource_group_name=self._operation_scope.resource_group_name,
             workspace_name=self._operation_scope.workspace_name,
             body=body,
         )
-        return rest_flow_result
 
     def get(self, name: str) -> Flow:
         """Get a flow from azure.
@@ -394,17 +394,16 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
             )
 
         endpoint = self._index_service_endpoint_url
-        url = endpoint + "/entities"
+        url = f"{endpoint}/entities"
         response = requests.post(url, headers=headers, json=payload)
 
-        if response.status_code == 200:
-            entities = json.loads(response.text)
-            flow_entities = entities["value"]
-        else:
+        if response.status_code != 200:
             raise FlowOperationError(
                 f"Failed to get flows from index service. Code: {response.status_code}, text: {response.text}"
             )
 
+        entities = json.loads(response.text)
+        flow_entities = entities["value"]
         # transform to flow instances
         flow_instances = []
         for entity in flow_entities:
@@ -426,14 +425,13 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
 
     @classmethod
     def _try_resolve_code_for_flow(cls, flow: Flow, ops: OperationOrchestrator, ignore_tools_json=False) -> None:
-        if flow.path:
-            # remote path
-            if flow.path.startswith("azureml://datastores"):
-                flow._code_uploaded = True
-                return
-        else:
+        if not flow.path:
             raise ValueError("Path is required for flow.")
 
+        # remote path
+        if flow.path.startswith("azureml://datastores"):
+            flow._code_uploaded = True
+            return
         with flow._build_code() as code:
             if code is None:
                 return
@@ -459,7 +457,7 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
             ignore_file = code._ignore_file
             upload_paths = []
             source_path = Path(code.path).resolve()
-            prefix = os.path.basename(source_path) + "/"
+            prefix = f"{os.path.basename(source_path)}/"
             for root, _, files in os.walk(source_path, followlinks=True):
                 upload_paths += list(
                     traverse_directory(
@@ -526,19 +524,18 @@ class FlowOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
 
         from ._artifact_utilities import _check_and_upload_path
 
-        if flow.path:
-            if flow.path.startswith("azureml://datastores"):
-                # remote path
-
-                path_uri = AzureMLDatastorePathUri(flow.path)
-                if path_uri.datastore != DEFAULT_STORAGE:
-                    raise ValueError(f"Only {DEFAULT_STORAGE} is supported as remote storage for now.")
-                flow.path = path_uri.path
-                flow._code_uploaded = True
-                return
-        else:
+        if not flow.path:
             raise ValueError("Path is required for flow.")
 
+        if flow.path.startswith("azureml://datastores"):
+            # remote path
+
+            path_uri = AzureMLDatastorePathUri(flow.path)
+            if path_uri.datastore != DEFAULT_STORAGE:
+                raise ValueError(f"Only {DEFAULT_STORAGE} is supported as remote storage for now.")
+            flow.path = path_uri.path
+            flow._code_uploaded = True
+            return
         with flow._build_code() as code:
             if code is None:
                 return

@@ -103,7 +103,7 @@ class RunInfo:
     @staticmethod
     def deserialize(data: dict) -> "RunInfo":
         """Deserialize the RunInfo from a dict."""
-        run_info = RunInfo(
+        return RunInfo(
             node=data.get("node"),
             flow_run_id=data.get("flow_run_id"),
             run_id=data.get("run_id"),
@@ -124,7 +124,6 @@ class RunInfo:
             system_metrics=data.get("system_metrics", None),
             result=data.get("result", None),
         )
-        return run_info
 
 
 @dataclass
@@ -203,7 +202,7 @@ class FlowRunInfo:
     @staticmethod
     def deserialize(data: dict) -> "FlowRunInfo":
         """Deserialize the FlowRunInfo from a dict."""
-        flow_run_info = FlowRunInfo(
+        return FlowRunInfo(
             run_id=data.get("run_id"),
             status=Status(data.get("status")),
             error=data.get("error", None),
@@ -227,7 +226,6 @@ class FlowRunInfo:
             result=data.get("result", None),
             upload_metrics=data.get("upload_metrics", False),
         )
-        return flow_run_info
 
     @staticmethod
     def create_with_error(start_time, inputs, index, run_id, error):

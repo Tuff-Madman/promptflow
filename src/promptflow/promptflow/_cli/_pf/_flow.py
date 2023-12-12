@@ -393,31 +393,30 @@ def test_flow(args):
                 ).generate_to_file(script)
             main_script_path = os.path.join(temp_dir, "main.py")
             pf_client.flows._chat_with_ui(script=main_script_path)
+    elif args.interactive:
+        pf_client.flows._chat(
+            flow=args.flow,
+            inputs=inputs,
+            environment_variables=environment_variables,
+            variant=args.variant,
+            show_step_output=args.verbose,
+        )
     else:
-        if args.interactive:
-            pf_client.flows._chat(
-                flow=args.flow,
-                inputs=inputs,
-                environment_variables=environment_variables,
-                variant=args.variant,
-                show_step_output=args.verbose,
-            )
+        result = pf_client.flows.test(
+            flow=args.flow,
+            inputs=inputs,
+            environment_variables=environment_variables,
+            variant=args.variant,
+            node=args.node,
+            allow_generator_output=False,
+            stream_output=False,
+            dump_test_result=True,
+        )
+        # Print flow/node test result
+        if isinstance(result, dict):
+            print(json.dumps(result, indent=4, ensure_ascii=False))
         else:
-            result = pf_client.flows.test(
-                flow=args.flow,
-                inputs=inputs,
-                environment_variables=environment_variables,
-                variant=args.variant,
-                node=args.node,
-                allow_generator_output=False,
-                stream_output=False,
-                dump_test_result=True,
-            )
-            # Print flow/node test result
-            if isinstance(result, dict):
-                print(json.dumps(result, indent=4, ensure_ascii=False))
-            else:
-                print(result)
+            print(result)
 
 
 def serve_flow(args):

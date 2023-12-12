@@ -146,11 +146,14 @@ class RunOperations(TelemetryMixin):
             error_message = "The output streaming for the run was interrupted, but the run is still executing."
             print(error_message)
 
-        if run.status == RunStatus.FAILED or run.status == RunStatus.CANCELED:
-            if run.status == RunStatus.FAILED:
-                error_message = local_storage.load_exception().get("message", "Run fails with unknown error.")
-            else:
-                error_message = "Run is canceled."
+        if run.status in [RunStatus.FAILED, RunStatus.CANCELED]:
+            error_message = (
+                local_storage.load_exception().get(
+                    "message", "Run fails with unknown error."
+                )
+                if run.status == RunStatus.FAILED
+                else "Run is canceled."
+            )
             if raise_on_error:
                 raise InvalidRunStatusError(error_message)
             else:
@@ -253,8 +256,7 @@ class RunOperations(TelemetryMixin):
             new_k = f"outputs.{k}"
             data[new_k] = copy.deepcopy(outputs[k])
             columns.append(new_k)
-        df = DataFrame(data).head(max_results).reindex(columns=columns)
-        return df
+        return DataFrame(data).head(max_results).reindex(columns=columns)
 
     @monitor_operation(activity_name="pf.runs.get_metrics", activity_type=ActivityType.PUBLICAPI)
     def get_metrics(self, name: Union[str, Run]) -> Dict[str, Any]:

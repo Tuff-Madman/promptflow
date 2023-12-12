@@ -76,10 +76,14 @@ def snake_to_camel(name):
 
 def find_type_in_override(params_override: Optional[list] = None) -> Optional[str]:
     params_override = params_override or []
-    for override in params_override:
-        if CommonYamlFields.TYPE in override:
-            return override[CommonYamlFields.TYPE]
-    return None
+    return next(
+        (
+            override[CommonYamlFields.TYPE]
+            for override in params_override
+            if CommonYamlFields.TYPE in override
+        ),
+        None,
+    )
 
 
 def load_yaml(source: Optional[Union[AnyStr, PathLike, IO]]) -> Dict:
@@ -269,8 +273,7 @@ def strip_quotation(value):
 
 def parse_variant(variant: str) -> Tuple[str, str]:
     variant_regex = r"\${([^.]+).([^}]+)}"
-    match = re.match(variant_regex, strip_quotation(variant))
-    if match:
+    if match := re.match(variant_regex, strip_quotation(variant)):
         return match.group(1), match.group(2)
     else:
         raise ValueError(f"Invalid variant format: {variant}, variant should be in format of ${{TUNING_NODE.VARIANT}}")
@@ -301,7 +304,7 @@ def get_used_connection_names_from_environment_variables():
 
 def get_used_connection_names_from_dict(connection_dict: dict):
     connection_names = set()
-    for key, val in connection_dict.items():
+    for val in connection_dict.values():
         connection_name, _ = _match_reference(val)
         if connection_name:
             connection_names.add(connection_name)
@@ -319,10 +322,7 @@ def _match_env_reference(val: str):
     try:
         val = val.strip()
         m = re.match(r"^\$\{env:(.+)}$", val)
-        if not m:
-            return None
-        name = m.groups()[0]
-        return name
+        return None if not m else m.groups()[0]
     except Exception:
         # for exceptions when val is not a string, return
         return None
@@ -387,9 +387,7 @@ def in_jupyter_notebook() -> bool:
 
         if "IPKernelApp" not in get_ipython().config:
             return False
-    except ImportError:
-        return False
-    except AttributeError:
+    except (ImportError, AttributeError):
         return False
     return True
 
@@ -430,7 +428,7 @@ def _normalize_identifier_name(name):
     normalized_name = re.sub(r"[\W_]", " ", normalized_name)  # No non-word characters
     normalized_name = re.sub(" +", " ", normalized_name).strip()  # No double spaces, leading or trailing spaces
     if re.match(r"\d", normalized_name):
-        normalized_name = "n" + normalized_name  # No leading digits
+        normalized_name = f"n{normalized_name}"
     return normalized_name
 
 
@@ -525,12 +523,10 @@ def _merge_local_code_and_additional_includes(code_path: Path):
 
 
 def incremental_print(log: str, printed: int, fileout) -> int:
-    count = 0
-    for line in log.splitlines():
+    for count, line in enumerate(log.splitlines()):
         if count >= printed:
             fileout.write(line + "\n")
             printed += 1
-        count += 1
     return printed
 
 
@@ -543,10 +539,10 @@ def get_promptflow_sdk_version() -> str:
 
 
 def print_pf_version():
-    print("promptflow\t\t\t {}".format(get_promptflow_sdk_version()))
+    print(f"promptflow\t\t\t {get_promptflow_sdk_version()}")
     print()
-    print("Executable '{}'".format(os.path.abspath(sys.executable)))
-    print("Python ({}) {}".format(platform.system(), sys.version))
+    print(f"Executable '{os.path.abspath(sys.executable)}'")
+    print(f"Python ({platform.system()}) {sys.version}")
 
 
 class PromptflowIgnoreFile(IgnoreFile):
@@ -633,7 +629,7 @@ def _generate_tool_meta(
             "Please handle timeout manually outside current process."
         )
         _generate_meta_from_files(tools, flow_directory, tools_dict, exception_dict)
-    res = {source: tool for source, tool in tools_dict.items()}
+    res = dict(tools_dict.items())
 
     for source in res:
         # remove name in tool meta
@@ -650,9 +646,7 @@ def _generate_tool_meta(
                         tool_input_type[i] = tool_input_type[i].value
 
     # collect errors and print warnings
-    errors = {
-        source: exception for source, exception in exception_dict.items()
-    }  # for not processed tools, regard as timeout error
+    errors = dict(exception_dict.items())
     for source, _ in tools:
         if source not in res and source not in errors:
             errors[source] = f"Generate meta timeout for source {source!r}."
@@ -661,7 +655,7 @@ def _generate_tool_meta(
             res[source] = errors[source]
         else:
             logger.warning(f"Generate meta for source {source!r} failed: {errors[source]}.")
-    if raise_error and len(errors) > 0:
+    if raise_error and errors:
         error_message = "Generate meta failed, detail error(s):\n" + json.dumps(errors, indent=4)
         raise GenerateFlowToolsJsonError(error_message)
     return res
@@ -688,8 +682,7 @@ def _retrieve_tool_func_result(func_call_scenario: str, function_config: Dict):
     else:
         result = retrieve_tool_func_result(func_call_scenario, func_path, func_kwargs)
 
-    result_with_log = {"result": result, "logs": {}}
-    return result_with_log
+    return {"result": result, "logs": {}}
 
 
 def _gen_dynamic_list(function_config: Dict) -> List:
@@ -945,9 +938,7 @@ def _generate_connections_dir():
     hash_object = hashlib.sha1(python_path.encode())
     hex_dig = hash_object.hexdigest()
 
-    # Generate the connections system path using the hash
-    connections_dir = (HOME_PROMPT_FLOW_DIR / "envs" / hex_dig / "connections").resolve()
-    return connections_dir
+    return (HOME_PROMPT_FLOW_DIR / "envs" / hex_dig / "connections").resolve()
 
 
 _refresh_connection_dir_lock = FileLock(REFRESH_CONNECTIONS_DIR_LOCK_PATH)
@@ -965,7 +956,7 @@ def refresh_connections_dir(connection_spec_files, connection_template_yamls):
 
         if connection_spec_files and connection_template_yamls:
             for connection_name, content in connection_spec_files.items():
-                file_name = connection_name + ".spec.json"
+                file_name = f"{connection_name}.spec.json"
                 with open(connections_dir / file_name, "w", encoding=DEFAULT_ENCODING) as f:
                     json.dump(content, f, indent=2)
 
@@ -974,7 +965,7 @@ def refresh_connections_dir(connection_spec_files, connection_template_yamls):
             yaml.preserve_quotes = True
             for connection_name, content in connection_template_yamls.items():
                 yaml_data = yaml.load(content)
-                file_name = connection_name + ".template.yaml"
+                file_name = f"{connection_name}.template.yaml"
                 with open(connections_dir / file_name, "w", encoding=DEFAULT_ENCODING) as f:
                     yaml.dump(yaml_data, f)
 

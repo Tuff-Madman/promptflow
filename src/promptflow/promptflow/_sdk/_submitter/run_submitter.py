@@ -84,11 +84,11 @@ class RunSubmitter:
         # prepare data
         input_dirs = self._resolve_input_dirs(run)
         self._validate_column_mapping(column_mapping)
-        batch_result = None
         status = Status.Failed.value
         exception = None
         # create run to db when fully prepared to run in executor, otherwise won't create it
         run._dump()  # pylint: disable=protected-access
+        batch_result = None
         try:
             batch_result = batch_engine.run(
                 input_dirs=input_dirs,
@@ -101,10 +101,7 @@ class RunSubmitter:
                 # Log warning message when there are failed line run in bulk run.
                 error_log = f"{batch_result.failed_lines} out of {batch_result.total_lines} runs failed in batch run."
                 if run.properties.get(FlowRunProperties.OUTPUT_PATH, None):
-                    error_log = (
-                        error_log
-                        + f" Please check out {run.properties[FlowRunProperties.OUTPUT_PATH]} for more details."
-                    )
+                    error_log = f"{error_log} Please check out {run.properties[FlowRunProperties.OUTPUT_PATH]} for more details."
                 logger.warning(error_log)
             # The bulk run is completed if the batch_engine.run successfully completed.
             status = Status.Completed.value
@@ -112,11 +109,9 @@ class RunSubmitter:
             # when run failed in executor, store the exception in result and dump to file
             logger.warning(f"Run {run.name} failed when executing in executor.")
             exception = e
-            # for user error, swallow stack trace and return failed run since user don't need the stack trace
-            if not isinstance(e, UserErrorException):
-                # for other errors, raise it to user to help debug root cause.
-                raise e
-            # won't raise the exception since it's already included in run object.
+            if not isinstance(exception, UserErrorException):
+                raise exception
+                # won't raise the exception since it's already included in run object.
         finally:
             # persist snapshot and result
             # snapshot: flow directory
@@ -153,11 +148,10 @@ class RunSubmitter:
             return
         if not isinstance(column_mapping, dict):
             raise UserErrorException(f"Column mapping must be a dict, got {type(column_mapping)}.")
-        all_static = True
-        for v in column_mapping.values():
-            if isinstance(v, str) and v.startswith("$"):
-                all_static = False
-                break
+        all_static = not any(
+            isinstance(v, str) and v.startswith("$")
+            for v in column_mapping.values()
+        )
         if all_static:
             raise UserErrorException(
                 "Column mapping must contain at least one mapping binding, "

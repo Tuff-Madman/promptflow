@@ -139,7 +139,7 @@ class BaseTest(unittest.TestCase):
                 "context": "${run.outputs.context}",
             },
             runtime=runtime,
-            display_name_postfix="_" + display_name,
+            display_name_postfix=f"_{display_name}",
         )
         self.pf.stream(eval_groundedness)  # wait for completion
         self.check_run_basics(eval_groundedness)
@@ -160,7 +160,7 @@ class BaseTest(unittest.TestCase):
                 "context": "${run.outputs.context}",
             },
             runtime=runtime,
-            display_name_postfix="_" + display_name,
+            display_name_postfix=f"_{display_name}",
         )
         self.pf.stream(eval_pi)  # wait for completion
         self.check_run_basics(eval_pi)

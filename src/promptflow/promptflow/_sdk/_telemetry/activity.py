@@ -93,7 +93,7 @@ def log_activity(
         exception = e
         completion_status = ActivityCompletionStatus.FAILURE
     finally:
-        try:
+        with contextlib.suppress(Exception):
             if first_call:
                 # recover request id in global storage
                 request_id_context.set(None)
@@ -107,9 +107,6 @@ def log_activity(
                 logger.error(message, extra={"custom_dimensions": activity_info})
             else:
                 logger.info(message, extra={"custom_dimensions": activity_info})
-        except Exception:  # pylint: disable=broad-except
-            # skip if logger failed to log
-            pass  # pylint: disable=lost-exception
         # raise the exception to align with the behavior of the with statement
         if exception:
             raise exception
@@ -117,13 +114,10 @@ def log_activity(
 
 def extract_telemetry_info(self):
     """Extract pf telemetry info from given telemetry mix-in instance."""
-    result = {}
-    try:
+    with contextlib.suppress(Exception):
         if isinstance(self, TelemetryMixin):
             return self._get_telemetry_values()
-    except Exception:
-        pass
-    return result
+    return {}
 
 
 def update_activity_name(activity_name, kwargs=None, args=None):

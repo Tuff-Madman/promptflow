@@ -42,9 +42,7 @@ class Tracer(ThreadLocalSingleton):
     @classmethod
     def current_run_id(cls):
         tracer = cls.active_instance()
-        if not tracer:
-            return None
-        return tracer._run_id
+        return None if not tracer else tracer._run_id
 
     @classmethod
     def end_tracing(cls, run_id: Optional[str] = None, raise_ex=False):
@@ -66,7 +64,7 @@ class Tracer(ThreadLocalSingleton):
     def push_tool(cls, f, args=[], kwargs={}):
         obj = cls.active_instance()
         sig = inspect.signature(f).parameters
-        all_kwargs = {**{k: v for k, v in zip(sig.keys(), args)}, **kwargs}
+        all_kwargs = {**dict(zip(sig.keys(), args)), **kwargs}
         all_kwargs = {
             k: ConnectionType.serialize_conn(v) if ConnectionType.is_connection_value(v) else v
             for k, v in all_kwargs.items()

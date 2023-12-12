@@ -139,7 +139,7 @@ class BatchEngine:
                 )
         except Exception as e:
             bulk_logger.error(f"Error occurred while executing batch run. Exception: {str(e)}")
-            if isinstance(e, ConnectError) or isinstance(e, ExecutorServiceUnhealthy):
+            if isinstance(e, (ConnectError, ExecutorServiceUnhealthy)):
                 bulk_logger.warning("The batch run may have been canceled or encountered other issues.")
                 return BatchResult.create(
                     self._start_time, datetime.utcnow(), [], AggregationResult({}, {}, {}), status=Status.Canceled

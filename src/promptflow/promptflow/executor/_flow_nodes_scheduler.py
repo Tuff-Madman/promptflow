@@ -72,16 +72,10 @@ class FlowNodesScheduler:
         return self._dag_manager.completed_nodes_outputs, self._dag_manager.bypassed_nodes
 
     def _execute_nodes(self, executor: ThreadPoolExecutor):
-        # Skip nodes and update node run info until there are no nodes to bypass
-        nodes_to_bypass = self._dag_manager.pop_bypassable_nodes()
-        while nodes_to_bypass:
+        while nodes_to_bypass := self._dag_manager.pop_bypassable_nodes():
             for node in nodes_to_bypass:
                 self._context.bypass_node(node)
-            nodes_to_bypass = self._dag_manager.pop_bypassable_nodes()
-
-        # Submit nodes that are ready to run
-        nodes_to_exec = self._dag_manager.pop_ready_nodes()
-        if nodes_to_exec:
+        if nodes_to_exec := self._dag_manager.pop_ready_nodes():
             self._submit_nodes(executor, nodes_to_exec)
 
     def _collect_outputs(self, completed_futures: List[Future]):
@@ -104,9 +98,8 @@ class FlowNodesScheduler:
         context = self._context
         f = self._tools_manager.get_tool(node.name)
         kwargs = dag_manager.get_node_valid_inputs(node, f)
-        if inspect.iscoroutinefunction(f):
-            # TODO: Run async functions in flow level event loop
-            result = asyncio.run(context.invoke_tool_async(node, f, kwargs=kwargs))
-        else:
-            result = context.invoke_tool(node, f, kwargs=kwargs)
-        return result
+        return (
+            asyncio.run(context.invoke_tool_async(node, f, kwargs=kwargs))
+            if inspect.iscoroutinefunction(f)
+            else context.invoke_tool(node, f, kwargs=kwargs)
+        )

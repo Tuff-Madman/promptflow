@@ -35,14 +35,12 @@ def start():
                 render_message(role, message_items)
 
     def get_chat_history_from_session():
-        if "history" in st.session_state:
-            return st.session_state.history
-        return []
+        return st.session_state.history if "history" in st.session_state else []
 
     def submit(**kwargs) -> None:
         st.session_state.messages.append(("user", kwargs))
         session_state_history = dict()
-        session_state_history.update({"inputs": kwargs})
+        session_state_history["inputs"] = kwargs
         with container:
             render_message("user", kwargs)
         # Force append chat history to kwargs
@@ -57,7 +55,7 @@ def start():
             for k, v in response.output.items()
         }
         st.session_state.messages.append(("assistant", resolved_outputs))
-        session_state_history.update({"outputs": response.output})
+        session_state_history["outputs"] = response.output
         st.session_state.history.append(session_state_history)
         if is_chat_flow:
             dump_path = Path(flow_path).parent
@@ -71,10 +69,7 @@ def start():
     def run_flow(data: dict) -> dict:
         global invoker
         if not invoker:
-            if flow_path:
-                flow = Path(flow_path)
-            else:
-                flow = Path(__file__).parent / "flow"
+            flow = Path(flow_path) if flow_path else Path(__file__).parent / "flow"
             if flow.is_dir():
                 os.chdir(flow)
             else:
@@ -132,7 +127,7 @@ def start():
                 input = st.text_input(label=flow_input, placeholder=default_value)
             else:
                 input = st.text_input(label=flow_input, placeholder=default_value)
-            flow_inputs_params.update({flow_input: copy(input)})
+            flow_inputs_params[flow_input] = copy(input)
 
         cols = st.columns(7)
         submit_bt = cols[0].form_submit_button(label=label, type='primary')
@@ -143,13 +138,13 @@ def start():
                 for flow_input, (default_value, value_type) in flow_inputs.items():
                     if value_type == "list":
                         input = parse_list_from_html(flow_inputs_params[flow_input])
-                        flow_inputs_params.update({flow_input: copy(input)})
+                        flow_inputs_params[flow_input] = copy(input)
                     elif value_type == "image":
                         input = parse_image_content(
                             flow_inputs_params[flow_input],
                             flow_inputs_params[flow_input].type if flow_inputs_params[flow_input] else None
                         )
-                        flow_inputs_params.update({flow_input: copy(input)})
+                        flow_inputs_params[flow_input] = copy(input)
                 submit(**flow_inputs_params)
 
         if clear_bt:

@@ -73,12 +73,11 @@ class RunSubmit(Resource):
             cmd = f"pf run create --file {run_file}"
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             stdout, _ = process.communicate()
-            if process.returncode == 0:
-                run_op = RunOperations()
-                run = run_op.get(name=run_name)
-                return jsonify(run._to_dict())
-            else:
+            if process.returncode != 0:
                 raise Exception(f"Create batch run failed: {stdout.decode('utf-8')}")
+            run_op = RunOperations()
+            run = run_op.get(name=run_name)
+            return jsonify(run._to_dict())
 
 
 @api.route("/<string:name>")

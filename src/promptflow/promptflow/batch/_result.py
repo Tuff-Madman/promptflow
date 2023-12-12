@@ -61,12 +61,11 @@ class ErrorSummary:
             )
             error_list.append(line_error)
 
-        error_summary = ErrorSummary(
+        return ErrorSummary(
             failed_user_error_lines=failed_user_error_lines,
             failed_system_error_lines=failed_system_error_lines,
             error_list=sorted(error_list, key=lambda x: x.line_number),
         )
-        return error_summary
 
 
 @dataclass
@@ -96,8 +95,7 @@ class SystemMetrics:
         total_metrics = {}
         calculator = OpenAIMetricsCalculator()
         for run_info in node_run_infos:
-            metrics = SystemMetrics._try_get_openai_metrics(run_info)
-            if metrics:
+            if metrics := SystemMetrics._try_get_openai_metrics(run_info):
                 calculator.merge_metrics_dict(total_metrics, metrics)
             else:
                 api_calls = run_info.api_calls or []
@@ -106,13 +104,13 @@ class SystemMetrics:
                     calculator.merge_metrics_dict(total_metrics, metrics)
         return total_metrics
 
-    def _try_get_openai_metrics(run_info):
+    def _try_get_openai_metrics(self):
         openai_metrics = {}
-        if run_info.system_metrics:
+        if self.system_metrics:
             for metric in ["total_tokens", "prompt_tokens", "completion_tokens"]:
-                if metric not in run_info.system_metrics:
+                if metric not in self.system_metrics:
                     return False
-                openai_metrics[metric] = run_info.system_metrics[metric]
+                openai_metrics[metric] = self.system_metrics[metric]
         return openai_metrics
 
     def to_dict(self):
@@ -179,5 +177,5 @@ def _get_node_run_infos(line_results: List[LineResult], aggr_results: Aggregatio
     line_node_run_infos = (
         node_run_info for line_result in line_results for node_run_info in line_result.node_run_infos.values()
     )
-    aggr_node_run_infos = (node_run_info for node_run_info in aggr_results.node_run_infos.values())
+    aggr_node_run_infos = iter(aggr_results.node_run_infos.values())
     return chain(line_node_run_infos, aggr_node_run_infos)

@@ -12,9 +12,7 @@ from ghactions_driver.telemetry_obj import Telemetry
 def local_filter(callback, array: [Path]):
     results = []
     for index, item in enumerate(array):
-        result = callback(item, index, array)
-        # if returned true, append item to results
-        if result:
+        if result := callback(item, index, array):
             results.append(item)
     return results
 
@@ -28,10 +26,7 @@ def no_readme_generation_filter(item: Path, index, array) -> bool:
             return False
 
         full_text = readme_parser(item.relative_to(ReadmeStepsManage.git_base_dir()))
-        if full_text == "":
-            return False
-        else:
-            return True
+        return full_text != ""
     except Exception as error:
         print(error)
         return False  # generate readme
@@ -48,7 +43,7 @@ def main(input_glob, exclude_glob=[], output_files=[]):
     globs_exclude = reduce(set_difference,
                            [set(Path(ReadmeStepsManage.git_base_dir()).glob(p)) for p in exclude_glob],
                            globs)
-    readme_items = sorted([i for i in globs_exclude])
+    readme_items = sorted(list(globs_exclude))
 
     readme_items = local_filter(no_readme_generation_filter, readme_items)
     for readme in readme_items:

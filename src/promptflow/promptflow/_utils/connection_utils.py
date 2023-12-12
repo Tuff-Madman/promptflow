@@ -74,37 +74,32 @@ def generate_custom_strong_type_connection_template(cls, connection_spec, packag
     }
 
     connection_template_with_data = connection_template.render(data)
-    connection_template_with_comments = render_comments(
+    return render_comments(
         connection_template_with_data, cls, secrets.keys(), configs.keys()
     )
 
-    return connection_template_with_comments
-
 
 def render_comments(connection_template, cls, secrets, configs):
-    if cls.__doc__ is not None:
-        yaml = YAML()
-        yaml.preserve_quotes = True
-        data = yaml.load(connection_template)
-        comments_map = extract_comments_mapping(list(secrets) + list(configs), cls.__doc__)
-        # Add comments for secret keys
-        for key in secrets:
-            if key in comments_map.keys():
-                data["secrets"].yaml_add_eol_comment(comments_map[key] + "\n", key)
+    if cls.__doc__ is None:
+        return connection_template
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    data = yaml.load(connection_template)
+    comments_map = extract_comments_mapping(list(secrets) + list(configs), cls.__doc__)
+    # Add comments for secret keys
+    for key in secrets:
+        if key in comments_map.keys():
+            data["secrets"].yaml_add_eol_comment(comments_map[key] + "\n", key)
 
-        # Add comments for config keys
-        for key in configs:
-            if key in comments_map.keys():
-                data["configs"].yaml_add_eol_comment(comments_map[key] + "\n", key)
+    # Add comments for config keys
+    for key in configs:
+        if key in comments_map.keys():
+            data["configs"].yaml_add_eol_comment(comments_map[key] + "\n", key)
 
-        # Dump data object back to string
-        buf = io.StringIO()
-        yaml.dump(data, buf)
-        connection_template_with_comments = buf.getvalue()
-
-        return connection_template_with_comments
-
-    return connection_template
+    # Dump data object back to string
+    buf = io.StringIO()
+    yaml.dump(data, buf)
+    return buf.getvalue()
 
 
 def extract_comments_mapping(keys, doc):
@@ -116,9 +111,9 @@ def extract_comments_mapping(keys, doc):
             type_pattern = rf":type {key}: (.*)"
             key_type = " ".join(re.findall(type_pattern, doc)).rstrip(".")
             if key_type and key_description:
-                comments_map[key] = " ".join([key_type + " type.", key_description])
+                comments_map[key] = " ".join([f"{key_type} type.", key_description])
             elif key_type:
-                comments_map[key] = key_type + " type."
+                comments_map[key] = f"{key_type} type."
             elif key_description:
                 comments_map[key] = key_description
         except re.error:

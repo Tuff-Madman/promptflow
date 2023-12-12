@@ -30,9 +30,7 @@ def value_to_str(val):
     if val is None:
         # Dump default: "" in json to avoid UI validation error
         return ""
-    if isinstance(val, Enum):
-        return val.value
-    return str(val)
+    return val.value if isinstance(val, Enum) else str(val)
 
 
 def resolve_annotation(anno) -> Union[str, list]:
@@ -80,12 +78,11 @@ def param_to_definition(param, gen_custom_type_conn=False) -> (InputDefinition, 
                         custom_connection_added = True
                         typ.append("CustomConnection")
                     custom_type_conn.append(t.__name__)
-                else:
-                    if t.__name__ != "CustomConnection":
-                        typ.append(t.__name__)
-                    elif not custom_connection_added:
-                        custom_connection_added = True
-                        typ.append(t.__name__)
+                elif t.__name__ != "CustomConnection":
+                    typ.append(t.__name__)
+                elif not custom_connection_added:
+                    custom_connection_added = True
+                    typ.append(t.__name__)
             is_connection = True
     else:
         typ = [ValueType.from_type(value_type)]
@@ -122,7 +119,10 @@ def function_to_interface(
         if any(k for k in initialize_inputs if k in sign.parameters):
             raise Exception(f'Duplicate inputs found from {f.__name__!r} and "__init__()"!')
         all_inputs = {**initialize_inputs}
-    enable_kwargs = any([param.kind == inspect.Parameter.VAR_KEYWORD for _, param in sign.parameters.items()])
+    enable_kwargs = any(
+        param.kind == inspect.Parameter.VAR_KEYWORD
+        for _, param in sign.parameters.items()
+    )
     all_inputs.update(
         {
             k: v
@@ -272,17 +272,17 @@ def append_workspace_triple_to_func_input_params(
     # 2. func signature has param named 'subscription_id','resource_group_name','workspace_name'.
     ws_triple_dict = ws_triple_dict if ws_triple_dict is not None else {}
     func_input_params_dict = func_input_params_dict if func_input_params_dict is not None else {}
-    has_kwargs_param = any([param.kind == inspect.Parameter.VAR_KEYWORD for _, param in func_sig_params.items()])
-    if has_kwargs_param is False:
+    has_kwargs_param = any(
+        param.kind == inspect.Parameter.VAR_KEYWORD
+        for _, param in func_sig_params.items()
+    )
+    if not has_kwargs_param:
         # keep only params that are in func signature. Or run into error when calling func.
         avail_ws_info_dict = {k: v for k, v in ws_triple_dict.items() if k in set(func_sig_params.keys())}
     else:
         avail_ws_info_dict = ws_triple_dict
 
-    # if ws triple key is in func input params, it means user has provided value for it,
-    # do not expect implicit override.
-    combined_func_input_params = dict(avail_ws_info_dict, **func_input_params_dict)
-    return combined_func_input_params
+    return dict(avail_ws_info_dict, **func_input_params_dict)
 
 
 def load_function_from_function_path(func_path: str):

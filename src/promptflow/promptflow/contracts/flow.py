@@ -135,10 +135,7 @@ class FlowInputAssignment(InputAssignment):
         :return: Whether the input value is a flow input.
         :rtype: bool
         """
-        for prefix in FLOW_INPUT_PREFIXES:
-            if input_value.startswith(prefix):
-                return True
-        return False
+        return any(input_value.startswith(prefix) for prefix in FLOW_INPUT_PREFIXES)
 
     @staticmethod
     def deserialize(value: str) -> "FlowInputAssignment":
@@ -220,11 +217,10 @@ class ActivateCondition:
         :return: The activate condition constructed from the dict.
         :rtype: ~promptflow.contracts.flow.ActivateCondition
         """
-        result = ActivateCondition(
+        return ActivateCondition(
             condition=InputAssignment.deserialize(data["when"]),
             condition_value=data["is"],
         )
-        return result
 
 
 @dataclass
@@ -354,8 +350,7 @@ class FlowInputDefinition:
         :return: The dict of the flow input definition.
         :rtype: dict
         """
-        data = {}
-        data["type"] = self.type.value
+        data = {"type": self.type.value}
         if self.default:
             data["default"] = str(self.default)
         if self.description:
@@ -415,8 +410,7 @@ class FlowOutputDefinition:
         :return: The dict of the flow output definition.
         :rtype: dict
         """
-        data = {}
-        data["type"] = self.type.value
+        data = {"type": self.type.value}
         if self.reference:
             data["reference"] = self.reference.serialize()
         if self.description:
@@ -495,9 +489,10 @@ class NodeVariants:
         :return: The node variants constructed from the dict.
         :rtype: ~promptflow.contracts.flow.NodeVariants
         """
-        variants = {}
-        for variant_id, node in data["variants"].items():
-            variants[variant_id] = NodeVariant.deserialize(node)
+        variants = {
+            variant_id: NodeVariant.deserialize(node)
+            for variant_id, node in data["variants"].items()
+        }
         return NodeVariants(default_variant_id=data.get("default_variant_id", ""), variants=variants)
 
 
@@ -538,7 +533,7 @@ class Flow:
         :return: The dict of the flow.
         :rtype: dict
         """
-        data = {
+        return {
             "id": self.id,
             "name": self.name,
             "nodes": [n.serialize() for n in self.nodes],
@@ -547,7 +542,6 @@ class Flow:
             "tools": [serialize(t) for t in self.tools],
             "language": self.program_language,
         }
-        return data
 
     @staticmethod
     def _import_requisites(tools, nodes):
@@ -769,10 +763,11 @@ class Flow:
             if node.connection:
                 connection_names.add(node.connection)
                 continue
-            if node.type == ToolType.PROMPT or node.type == ToolType.LLM:
+            if node.type in [ToolType.PROMPT, ToolType.LLM]:
                 continue
-            tool = self.get_tool(node.tool) or self._tool_loader.load_tool_for_node(node)
-            if tool:
+            if tool := self.get_tool(
+                node.tool
+            ) or self._tool_loader.load_tool_for_node(node):
                 connection_names.update(self._get_connection_name_from_tool(tool, node).values())
         return set({item for item in connection_names if item})
 
@@ -784,8 +779,9 @@ class Flow:
         # Ignore Prompt node and LLM node, due to they do not have connection inputs.
         if not node or node.type == ToolType.PROMPT or node.type == ToolType.LLM:
             return []
-        tool = self.get_tool(node.tool) or self._tool_loader.load_tool_for_node(node)
-        if tool:
+        if tool := self.get_tool(
+            node.tool
+        ) or self._tool_loader.load_tool_for_node(node):
             return list(self._get_connection_name_from_tool(tool, node).keys())
         return []
 

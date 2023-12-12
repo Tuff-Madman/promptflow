@@ -12,7 +12,7 @@ def show_image(image, key=None):
     col1, _ = st.columns(2)
     with col1:
         if not image.startswith("data:image"):
-            st.image(key + "," + image, use_column_width="auto")
+            st.image(f"{key},{image}", use_column_width="auto")
         else:
             st.image(image, use_column_width="auto")
 
@@ -31,9 +31,8 @@ def is_list_contains_rich_text(rich_text):
             result |= is_list_contains_rich_text(item)
         elif isinstance(item, dict):
             result |= is_dict_contains_rich_text(item)
-        else:
-            if isinstance(item, str) and item.startswith("data:image"):
-                result = True
+        elif isinstance(item, str) and item.startswith("data:image"):
+            result = True
     return result
 
 
@@ -56,11 +55,10 @@ def item_render_message(value, key=None):
         show_image(value, key)
     elif isinstance(value, str) and value.startswith("data:image"):
         show_image(value)
+    elif key is None:
+        st.markdown(f"`{json_dumps(value)},`")
     else:
-        if key is None:
-            st.markdown(f"`{json_dumps(value)},`")
-        else:
-            st.markdown(f"`{key}: {json_dumps(value)},`")
+        st.markdown(f"`{key}: {json_dumps(value)},`")
 
 
 def list_iter_render_message(message_items):
@@ -88,15 +86,14 @@ def dict_iter_render_message(message_items):
         for key, value in message_items.items():
             if re.match(MIME_PATTERN, key):
                 show_image(value, key)
+            elif isinstance(value, list):
+                st.markdown(f"`{key}: `")
+                list_iter_render_message(value)
+            elif isinstance(value, dict):
+                st.markdown(f"`{key}: `")
+                dict_iter_render_message(value)
             else:
-                if isinstance(value, list):
-                    st.markdown(f"`{key}: `")
-                    list_iter_render_message(value)
-                elif isinstance(value, dict):
-                    st.markdown(f"`{key}: `")
-                    dict_iter_render_message(value)
-                else:
-                    item_render_message(value, key)
+                item_render_message(value, key)
         st.markdown("`}, `")
     else:
         st.markdown(f"`{json_dumps(message_items)},`")
@@ -120,20 +117,17 @@ def render_single_dict_message(message_items):
     for key, value in message_items.items():
         if re.match(MIME_PATTERN, key):
             show_image(value, key)
-            continue
+        elif isinstance(value, list):
+            render_single_list_message(value)
+        elif isinstance(value, dict):
+            render_single_dict_message(value)
         else:
-            if isinstance(value, list):
-                render_single_list_message(value)
-            elif isinstance(value, dict):
-                render_single_dict_message(value)
-            else:
-                item_render_message(value, key)
+            item_render_message(value, key)
 
 
 def extract_content(node):
     if isinstance(node, NavigableString):
-        text = node.strip()
-        if text:
+        if text := node.strip():
             return [text]
     elif isinstance(node, Tag):
         if node.name == "img":

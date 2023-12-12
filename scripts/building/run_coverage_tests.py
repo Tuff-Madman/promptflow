@@ -6,7 +6,10 @@ from pathlib import Path
 from utils import Color, run_command, print_red
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=Color.RED + "Test Coverage for Promptflow!" + Color.END + "\n")
+    parser = argparse.ArgumentParser(
+        description=f"{Color.RED}Test Coverage for Promptflow!{Color.END}"
+        + "\n"
+    )
 
     parser.add_argument("-p", required=True, nargs="+", help="The paths to calculate code coverage")
     parser.add_argument("-t", required=True, nargs="+", help="The path to the tests")
@@ -50,18 +53,18 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    print("Working directory: " + str(os.getcwd()))
-    print("Args.p: " + str(args.p))
-    print("Args.t: " + str(args.t))
-    print("Args.l: " + str(args.l))
-    print("Args.m: " + str(args.m))
-    print("Args.n: " + str(args.n))
-    print("Args.o: " + str(args.o))
-    print("Args.model-name: " + str(args.model_name))
-    print("Args.timeout: " + str(args.timeout))
-    print("Args.coverage-config: " + str(args.coverage_config))
-    print("Args.ignore-glob: " + str(args.ignore_glob))
-    print("Args.disable-cov-branch: " + str(args.disable_cov_branch))
+    print(f"Working directory: {os.getcwd()}")
+    print(f"Args.p: {str(args.p)}")
+    print(f"Args.t: {str(args.t)}")
+    print(f"Args.l: {str(args.l)}")
+    print(f"Args.m: {str(args.m)}")
+    print(f"Args.n: {str(args.n)}")
+    print(f"Args.o: {str(args.o)}")
+    print(f"Args.model-name: {str(args.model_name)}")
+    print(f"Args.timeout: {str(args.timeout)}")
+    print(f"Args.coverage-config: {str(args.coverage_config)}")
+    print(f"Args.ignore-glob: {str(args.ignore_glob)}")
+    print(f"Args.disable-cov-branch: {str(args.disable_cov_branch)}")
 
     test_paths_list = [str(Path(path).absolute()) for path in args.t]
 
@@ -82,9 +85,9 @@ if __name__ == "__main__":
             "--cov-report=html",
             "--cov-report=xml",
         ]
-        pytest_command = pytest_command + [f"--cov-config={args.coverage_config}"]
+        pytest_command += [f"--cov-config={args.coverage_config}"]
     if args.ignore_glob:
-        pytest_command = pytest_command + [f"--ignore-glob={args.ignore_glob}"]
+        pytest_command += [f"--ignore-glob={args.ignore_glob}"]
     pytest_command += [
         "-n",
         args.n,
@@ -99,7 +102,7 @@ if __name__ == "__main__":
     ]
 
     if args.timeout:
-        pytest_command = pytest_command + [
+        pytest_command += [
             "--timeout",
             args.timeout,
             "--timeout_method",
@@ -107,10 +110,10 @@ if __name__ == "__main__":
         ]
 
     if args.m != "all":
-        pytest_command = pytest_command + ["-m", args.m]
+        pytest_command += ["-m", args.m]
 
     if args.model_name:
-        pytest_command = pytest_command + ["--model-name", args.model_name]
+        pytest_command += ["--model-name", args.model_name]
 
     # pytest --junit-xml=test-results.xml --cov=azure.ai.ml --cov-report=html --cov-report=xml -ra ./tests/*/unittests/
     error_code, _ = run_command(pytest_command, throw_on_retcode=False)

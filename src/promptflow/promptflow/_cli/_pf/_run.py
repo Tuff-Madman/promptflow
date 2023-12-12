@@ -99,16 +99,16 @@ def add_run_create_common(subparsers, add_param_list, epilog: Optional[str] = No
     ] + base_params
 
     add_params.extend(add_param_list)
-    create_parser = activate_action(
+    return activate_action(
         name="create",
         description=None,
-        epilog=epilog or "pf run create --file <local-path-to-yaml> [--stream]",
+        epilog=epilog
+        or "pf run create --file <local-path-to-yaml> [--stream]",
         add_params=add_params,
         subparsers=subparsers,
         help_message="Create a run.",
         action_param_name="sub_action",
     )
-    return create_parser
 
 
 def add_run_create(subparsers):
@@ -414,7 +414,7 @@ def _parse_metadata_args(params: List[Dict[str, str]]) -> Tuple[Optional[str], O
                 if tag_key in tags:
                     raise ValueError(f"Duplicate argument: 'tags.{tag_key}'.")
                 tags[tag_key] = v
-    if len(tags) == 0:
+    if not tags:
         tags = None
     return display_name, description, tags
 

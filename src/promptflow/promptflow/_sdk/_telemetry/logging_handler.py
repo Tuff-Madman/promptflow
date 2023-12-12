@@ -30,12 +30,11 @@ def get_appinsights_log_handler():
             "installation_id": config.get_or_set_installation_id(),
         }
 
-        handler = PromptFlowSDKLogHandler(
+        return PromptFlowSDKLogHandler(
             connection_string=f"InstrumentationKey={instrumentation_key}",
             custom_properties=custom_properties,
             enable_telemetry=is_telemetry_enabled(),
         )
-        return handler
     except Exception:  # pylint: disable=broad-except
         # ignore any exceptions, telemetry collection errors shouldn't block an operation
         return logging.NullHandler()
@@ -67,7 +66,7 @@ def get_scrubbed_cloud_role():
         cloud_role = os.path.basename(sys.argv[0]) or default
         if cloud_role not in known_scripts:
             ext = os.path.splitext(cloud_role)[1]
-            cloud_role = "***" + ext
+            cloud_role = f"***{ext}"
     except Exception:
         # fallback to default cloud role if failed to scrub
         cloud_role = default
@@ -100,7 +99,9 @@ class PromptFlowSDKLogHandler(AzureEventHandler):
             self._queue.put(record, block=False)
 
             # log the record immediately if it is an error
-            if record.exc_info and not all(item is None for item in record.exc_info):
+            if record.exc_info and any(
+                item is not None for item in record.exc_info
+            ):
                 self._queue.flush()
         except Exception:  # pylint: disable=broad-except
             # ignore any exceptions, telemetry collection errors shouldn't block an operation

@@ -34,9 +34,7 @@ class OpenAIMetricsCalculator:
         if not isinstance(output, dict) and not isinstance(output, list):
             return False
         inputs = api_call.get("inputs")
-        if not isinstance(inputs, dict):
-            return False
-        return True
+        return isinstance(inputs, dict)
 
     def _get_openai_metrics_for_signal_api(self, api_call: dict):
         output = api_call.get("output")
@@ -57,28 +55,25 @@ class OpenAIMetricsCalculator:
         # OpenAI v1 api:
         #   https://github.com/openai/openai-python/blob/main/src/openai/resources/chat/completions.py
         #   https://github.com/openai/openai-python/blob/main/src/openai/resources/completions.py
-        if (
-            name == "openai.api_resources.chat_completion.ChatCompletion.create"
-            or name == "openai.resources.chat.completions.Completions.create"  # openai v1
-        ):
+        if name in [
+            "openai.api_resources.chat_completion.ChatCompletion.create",
+            "openai.resources.chat.completions.Completions.create",
+        ]:
             return self._get_openai_metrics_for_chat_api(api_call)
-        elif (
-            name == "openai.api_resources.completion.Completion.create"
-            or name == "openai.resources.completions.Completions.create"  # openai v1
-        ):
+        elif name in [
+            "openai.api_resources.completion.Completion.create",
+            "openai.resources.completions.Completions.create",
+        ]:
             return self._get_openai_metrics_for_completion_api(api_call)
         else:
             raise CalculatingMetricsError(f"Calculating metrics for api {name} is not supported.")
 
     def _try_get_model(self, inputs):
         if IS_LEGACY_OPENAI:
-            api_type = inputs.get("api_type")
-            if not api_type:
-                raise CalculatingMetricsError("Cannot calculate metrics for none or empty api_type.")
-            if api_type == "azure":
-                model = inputs.get("engine")
+            if api_type := inputs.get("api_type"):
+                model = inputs.get("engine") if api_type == "azure" else inputs.get("model")
             else:
-                model = inputs.get("model")
+                raise CalculatingMetricsError("Cannot calculate metrics for none or empty api_type.")
         else:
             model = inputs.get("model")
         if not model:
@@ -91,14 +86,12 @@ class OpenAIMetricsCalculator:
     def _get_openai_metrics_for_chat_api(self, api_call):
         inputs = api_call.get("inputs")
         output = api_call.get("output")
-        metrics = {}
         enc, tokens_per_message, tokens_per_name = self._get_encoding_for_chat_api(self._try_get_model(inputs))
-        metrics["prompt_tokens"] = self._get_prompt_tokens_from_messages(
-            inputs["messages"],
-            enc,
-            tokens_per_message,
-            tokens_per_name
-        )
+        metrics = {
+            "prompt_tokens": self._get_prompt_tokens_from_messages(
+                inputs["messages"], enc, tokens_per_message, tokens_per_name
+            )
+        }
         if isinstance(output, list):
             if IS_LEGACY_OPENAI:
                 metrics["completion_tokens"] = len(output)
@@ -151,11 +144,10 @@ class OpenAIMetricsCalculator:
         return completion_tokens
 
     def _get_openai_metrics_for_completion_api(self, api_call: dict):
-        metrics = {}
         inputs = api_call.get("inputs")
         output = api_call.get("output")
         enc = self._get_encoding_for_completion_api(self._try_get_model(inputs))
-        metrics["prompt_tokens"] = 0
+        metrics = {"prompt_tokens": 0}
         prompt = inputs.get("prompt")
         if isinstance(prompt, str):
             metrics["prompt_tokens"] = len(enc.encode(prompt))
