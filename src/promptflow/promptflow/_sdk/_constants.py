@@ -323,8 +323,11 @@ class FlowType:
 
     @staticmethod
     def get_all_values():
-        values = [value for key, value in vars(FlowType).items() if isinstance(value, str) and key.isupper()]
-        return values
+        return [
+            value
+            for key, value in vars(FlowType).items()
+            if isinstance(value, str) and key.isupper()
+        ]
 
 
 CLIENT_FLOW_TYPE_2_SERVICE_FLOW_TYPE = {

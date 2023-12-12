@@ -106,7 +106,7 @@ class AsyncRunDownloader:
         """Get the run data from the run history."""
         logger.debug("Getting run data from run history.")
         headers = self.run_ops._get_headers()
-        url = self.run_ops._run_history_endpoint_url + "/rundata"
+        url = f"{self.run_ops._run_history_endpoint_url}/rundata"
 
         payload = {
             "runId": self.run,
@@ -199,7 +199,7 @@ class AsyncRunDownloader:
         logger.debug("Getting flow snapshot blob urls from snapshot id with calling to content service.")
         headers = self.run_ops._get_headers()
         endpoint = self.run_ops._run_history_endpoint_url.replace("/history/v1.0", "/content/v2.0")
-        url = endpoint + "/snapshots/sas"
+        url = f"{endpoint}/snapshots/sas"
         payload = {
             "snapshotOrAssetId": snapshot_id,
         }
@@ -220,7 +220,7 @@ class AsyncRunDownloader:
         logger.debug("Getting asset path from asset id with calling to data service.")
         headers = self.run_ops._get_headers()
         endpoint = self.run_ops._run_history_endpoint_url.replace("/history", "/data")
-        url = endpoint + "/dataversion/getByAssetId"
+        url = f"{endpoint}/dataversion/getByAssetId"
         payload = {
             "value": asset_id,
         }

@@ -77,8 +77,7 @@ class FlowOperations(TelemetryMixin):
             flow=flow, inputs=inputs, variant=variant, node=node, environment_variables=environment_variables, **kwargs
         )
 
-        dump_test_result = kwargs.get("dump_test_result", False)
-        if dump_test_result:
+        if dump_test_result := kwargs.get("dump_test_result", False):
             # Dump flow/node test info
             flow = load_flow(flow)
             if node:
@@ -377,23 +376,22 @@ class FlowOperations(TelemetryMixin):
         )
 
         with _change_working_dir(flow_dag_path.parent):
-            if executable.program_language == FlowLanguage.CSharp:
-                connection_names = SubmitterHelper.resolve_connection_names_from_tool_meta(
-                    tools_meta=CSharpExecutorProxy.generate_tool_metadata(
-                        working_dir=flow_dag_path.parent.absolute(),
-                    ),
-                    flow_dag=executable.serialize(),
-                )
-
-                return self._migrate_connections(
-                    connection_names=connection_names,
-                    output_dir=output_dir,
-                )
-            else:
+            if executable.program_language != FlowLanguage.CSharp:
                 return self._migrate_connections(
                     connection_names=executable.get_connection_names(),
                     output_dir=output_dir,
                 )
+            connection_names = SubmitterHelper.resolve_connection_names_from_tool_meta(
+                tools_meta=CSharpExecutorProxy.generate_tool_metadata(
+                    working_dir=flow_dag_path.parent.absolute(),
+                ),
+                flow_dag=executable.serialize(),
+            )
+
+            return self._migrate_connections(
+                connection_names=connection_names,
+                output_dir=output_dir,
+            )
 
     def _build_flow(
         self,
@@ -500,7 +498,9 @@ class FlowOperations(TelemetryMixin):
             for flow_input, value in executable.inputs.items()
             if not value.is_chat_history
         }
-        flow_inputs_params = ["=".join([flow_input, flow_input]) for flow_input, _ in flow_inputs.items()]
+        flow_inputs_params = [
+            "=".join([flow_input, flow_input]) for flow_input in flow_inputs
+        ]
         flow_inputs_params = ",".join(flow_inputs_params)
 
         is_chat_flow, chat_history_input_name, _ = self._is_chat_flow(executable)
@@ -561,23 +561,15 @@ class FlowOperations(TelemetryMixin):
         if format not in ["docker", "executable"]:
             raise ValueError(f"Unsupported export format: {format}")
 
-        if variant:
-            tuning_node, node_variant = parse_variant(variant)
-        else:
-            tuning_node, node_variant = None, None
-
+        tuning_node, node_variant = parse_variant(variant) if variant else (None, None)
         flow_only = kwargs.pop("flow_only", False)
-        if flow_only:
-            output_flow_dir = output_dir
-        else:
-            output_flow_dir = output_dir / "flow"
-
+        output_flow_dir = output_dir if flow_only else output_dir / "flow"
         new_flow_dag_path = self._build_flow(
             flow_dag_path=flow.flow_dag_path,
             output=output_flow_dir,
             tuning_node=tuning_node,
             node_variant=node_variant,
-            update_flow_tools_json=False if is_csharp_flow else True,
+            update_flow_tools_json=not is_csharp_flow,
         )
 
         if flow_only:
@@ -712,13 +704,12 @@ class FlowOperations(TelemetryMixin):
 
         flow_tools_meta = flow_tools.pop("code", {})
 
-        tools_errors = {}
         nodes_with_error = [node_name for node_name, message in flow_tools_meta.items() if isinstance(message, str)]
-        for node_name in nodes_with_error:
-            tools_errors[node_name] = flow_tools_meta.pop(node_name)
-
-        additional_includes = _get_additional_includes(flow.flow_dag_path)
-        if additional_includes:
+        tools_errors = {
+            node_name: flow_tools_meta.pop(node_name)
+            for node_name in nodes_with_error
+        }
+        if additional_includes := _get_additional_includes(flow.flow_dag_path):
             additional_files = {}
             for include in additional_includes:
                 include_path = Path(include) if Path(include).is_absolute() else flow.code / include

@@ -87,9 +87,7 @@ class ToolExecutionError(UserErrorException):
                 # We don't use traceback.format_exception since its interface differs between 3.8 and 3.10.
                 # Use this internal class to adapt to different python versions.
                 te = TracebackException(type(exc), exc, tb)
-                formatted_tb = "".join(te.format())
-                return formatted_tb
-
+                return "".join(te.format())
         return None
 
     @property

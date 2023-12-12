@@ -25,7 +25,7 @@ class Feature:
 
 
 def get_feature_list():
-    feature_list = [
+    return [
         Feature(
             name="ActivateConfig",
             description="Bypass node execution when the node does not meet activate condition.",
@@ -37,5 +37,3 @@ def get_feature_list():
             state=FeatureState.READY,
         ),
     ]
-
-    return feature_list

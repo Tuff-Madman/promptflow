@@ -10,17 +10,15 @@ def string_to_number(raw_string: str) -> float:
     try:
         float_number = float(raw_string)
     except Exception:
-        if '/' in raw_string:
-            split_list = raw_string.split('/')
-            if len(split_list) == 2:
-                numerator, denominator = split_list
-                try:
-                    float_number = float(numerator) / float(denominator)
-                except Exception:
-                    return None
-            else:
-                return None
-        else:
+        if '/' not in raw_string:
+            return None
+        split_list = raw_string.split('/')
+        if len(split_list) != 2:
+            return None
+        numerator, denominator = split_list
+        try:
+            float_number = float(numerator) / float(denominator)
+        except Exception:
             return None
     return float_number
 
@@ -35,10 +33,7 @@ def line_process(groundtruth: str, prediction: str) -> int:
     if (gt_float is None):
         return -1
     ''' both pred_float and gt_float are valid'''
-    if round(pred_float, 10) == round(gt_float, 10):
-        return 1
-    else:
-        return -1
+    return 1 if round(pred_float, 10) == round(gt_float, 10) else -1
 
 
 if __name__ == "__main__":

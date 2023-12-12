@@ -19,4 +19,4 @@ class MyCustomConnection(CustomStrongTypeConnection):
 def my_tool(connection: MyCustomConnection, input_text: str) -> str:
     # Replace with your tool code.
     # Use custom strong type connection like: connection.api_key, connection.api_base
-    return "Hello " + input_text
+    return f"Hello {input_text}"

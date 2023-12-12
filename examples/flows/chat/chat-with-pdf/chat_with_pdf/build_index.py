@@ -16,11 +16,11 @@ def create_faiss_index(pdf_path: str) -> str:
     chunk_overlap = int(os.environ.get("CHUNK_OVERLAP"))
     log(f"Chunk size: {chunk_size}, chunk overlap: {chunk_overlap}")
 
-    file_name = Path(pdf_path).name + f".index_{chunk_size}_{chunk_overlap}"
+    file_name = f"{Path(pdf_path).name}.index_{chunk_size}_{chunk_overlap}"
     index_persistent_path = Path(INDEX_DIR) / file_name
     index_persistent_path = index_persistent_path.resolve().as_posix()
-    lock_path = index_persistent_path + ".lock"
-    log("Index path: " + os.path.abspath(index_persistent_path))
+    lock_path = f"{index_persistent_path}.lock"
+    log(f"Index path: {os.path.abspath(index_persistent_path)}")
 
     with acquire_lock(lock_path):
         if os.path.exists(os.path.join(index_persistent_path, "index.faiss")):
@@ -33,10 +33,7 @@ def create_faiss_index(pdf_path: str) -> str:
         log("Building index")
         pdf_reader = PyPDF2.PdfReader(pdf_path)
 
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-
+        text = "".join(page.extract_text() for page in pdf_reader.pages)
         # Chunk the words into segments of X words with Y-word overlap, X=CHUNK_SIZE, Y=OVERLAP_SIZE
         segments = split_text(text, chunk_size, chunk_overlap)
 
@@ -47,7 +44,7 @@ def create_faiss_index(pdf_path: str) -> str:
 
         index.save(index_persistent_path)
 
-        log("Index built: " + index_persistent_path)
+        log(f"Index built: {index_persistent_path}")
         return index_persistent_path
 
 

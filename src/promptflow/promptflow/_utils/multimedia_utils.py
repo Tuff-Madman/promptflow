@@ -26,23 +26,18 @@ def _get_mime_type_from_path(path: Path):
 
 def _get_extension_from_mime_type(mime_type: str):
     ext = mime_type.split("/")[-1]
-    if ext == "*":
-        return None
-    return ext
+    return None if ext == "*" else ext
 
 
 def is_multimedia_dict(multimedia_dict: dict):
     if len(multimedia_dict) != 1:
         return False
     key = list(multimedia_dict.keys())[0]
-    if re.match(MIME_PATTERN, key):
-        return True
-    return False
+    return bool(re.match(MIME_PATTERN, key))
 
 
 def _get_multimedia_info(key: str):
-    match = re.match(MIME_PATTERN, key)
-    if match:
+    if match := re.match(MIME_PATTERN, key):
         return match.group(1), match.group(2)
     return None, None
 
@@ -57,9 +52,7 @@ def _is_url(value: str):
 
 def _is_base64(value: str):
     base64_regex = re.compile(r"^([A-Za-z0-9+/]{4})*(([A-Za-z0-9+/]{2})*(==|[A-Za-z0-9+/]=)?)?$")
-    if re.match(base64_regex, value):
-        return True
-    return False
+    return bool(re.match(base64_regex, value))
 
 
 def _create_image_from_file(f: Path, mime_type: str = None):
@@ -80,13 +73,7 @@ def _create_image_from_base64(base64_str: str, mime_type: str = None):
 
 def _create_image_from_url(url: str, mime_type: str = None):
     response = requests.get(url)
-    if response.status_code == 200:
-        if not mime_type:
-            mime_type = filetype.guess_mime(response.content)
-            if not mime_type.startswith("image/"):
-                mime_type = "image/*"
-        return Image(response.content, mime_type=mime_type, source_url=url)
-    else:
+    if response.status_code != 200:
         raise InvalidImageInput(
             message_format="Failed to fetch image from URL: {url}. Error code: {error_code}. "
             "Error message: {error_message}.",
@@ -95,6 +82,11 @@ def _create_image_from_url(url: str, mime_type: str = None):
             error_code=response.status_code,
             error_message=response.text,
         )
+    if not mime_type:
+        mime_type = filetype.guess_mime(response.content)
+        if not mime_type.startswith("image/"):
+            mime_type = "image/*"
+    return Image(response.content, mime_type=mime_type, source_url=url)
 
 
 def _create_image_from_dict(image_dict: dict):
@@ -219,7 +211,7 @@ def load_multimedia_data(inputs: Dict[str, FlowInputDefinition], line_inputs: di
                 updated_inputs[key] = [create_image(item) for item in updated_inputs[key]]
             else:
                 updated_inputs[key] = create_image(updated_inputs[key])
-        elif value.type == ValueType.LIST or value.type == ValueType.OBJECT:
+        elif value.type in [ValueType.LIST, ValueType.OBJECT]:
             updated_inputs[key] = load_multimedia_data_recursively(updated_inputs[key])
     return updated_inputs
 

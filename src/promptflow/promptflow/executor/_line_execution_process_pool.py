@@ -388,19 +388,20 @@ class LineExecutionProcessPool:
         return result_list
 
     def _generate_thread_status_messages(self, pool: ThreadPool, total_count: int):
-        msgs = []
         active_threads = sum(thread.is_alive() for thread in pool._pool)
-        msgs.append(f"[Process Pool] [Active processes: {active_threads} / {len(pool._pool)}]")
+        msgs = [
+            f"[Process Pool] [Active processes: {active_threads} / {len(pool._pool)}]"
+        ]
         processing_lines_copy = self._processing_idx.copy()
         completed_lines_copy = self._completed_idx.copy()
         msgs.append(
             f"[Lines] [Finished: {len(completed_lines_copy)}] [Processing: {len(processing_lines_copy)}] "
             f"[Pending: {total_count - len(processing_lines_copy) - len(completed_lines_copy)}]"
         )
-        lines = []
-        for idx, thread_name in sorted(processing_lines_copy.items()):
-            lines.append(f"line {idx} ({thread_name})")
-        if len(lines) > 0:
+        if lines := [
+            f"line {idx} ({thread_name})"
+            for idx, thread_name in sorted(processing_lines_copy.items())
+        ]:
             msgs.append("Processing Lines: " + ", ".join(lines) + ".")
         return msgs
 
@@ -477,13 +478,12 @@ def _exec_line(
         executor._run_tracker.start_flow_run(flow_id, run_id, line_run_id, run_id)
         run_info = executor._run_tracker.end_run(f"{run_id}_{index}", ex=e)
         output_queue.put(run_info)
-        result = LineResult(
+        return LineResult(
             output={},
             aggregation_inputs={},
             run_info=run_info,
             node_run_infos={},
         )
-        return result
 
 
 def _process_wrapper(
@@ -597,7 +597,7 @@ def get_multiprocessing_context(multiprocessing_start_method=None):
     if multiprocessing_start_method is not None:
         context = multiprocessing.get_context(multiprocessing_start_method)
         bulk_logger.info(f"Set start method to {multiprocessing_start_method}.")
-        return context
     else:
         context = multiprocessing.get_context()
-        return context
+
+    return context

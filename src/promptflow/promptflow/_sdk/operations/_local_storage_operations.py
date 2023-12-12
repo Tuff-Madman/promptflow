@@ -79,16 +79,15 @@ class LoggerOperations(LogContext):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         if self.run_mode == RunMode.Batch:
             log_path.touch(exist_ok=True)
+        elif log_path.exists():
+            # for non batch run, clean up previous log content
+            try:
+                with open(log_path, mode="w", encoding=DEFAULT_ENCODING) as file:
+                    file.truncate(0)
+            except Exception as e:
+                logger.warning(f"Failed to clean up the previous log content because {e}")
         else:
-            if log_path.exists():
-                # for non batch run, clean up previous log content
-                try:
-                    with open(log_path, mode="w", encoding=DEFAULT_ENCODING) as file:
-                        file.truncate(0)
-                except Exception as e:
-                    logger.warning(f"Failed to clean up the previous log content because {e}")
-            else:
-                log_path.touch()
+            log_path.touch()
 
         for _logger in self._get_execute_loggers_list():
             for handler in _logger.handlers:
@@ -220,7 +219,7 @@ class LocalStorageOperations(AbstractRunStorage):
 
     def dump_snapshot(self, flow: Flow) -> None:
         """Dump flow directory to snapshot folder, input file will be dumped after the run."""
-        patterns = [pattern for pattern in PromptflowIgnoreFile.IGNORE_FILE]
+        patterns = list(PromptflowIgnoreFile.IGNORE_FILE)
         # ignore current output parent folder to avoid potential recursive copy
         patterns.append(self._run._output_path.parent.name)
         shutil.copytree(
@@ -240,9 +239,8 @@ class LocalStorageOperations(AbstractRunStorage):
     def load_flow_tools_json(self) -> dict:
         if not self._flow_tools_json_path.is_file():
             return generate_flow_tools_json(self._snapshot_folder_path, dump=False)
-        else:
-            with open(self._flow_tools_json_path, mode="r", encoding=DEFAULT_ENCODING) as f:
-                return json.load(f)
+        with open(self._flow_tools_json_path, mode="r", encoding=DEFAULT_ENCODING) as f:
+            return json.load(f)
 
     def load_io_spec(self) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]]]:
         """Load input/output spec from DAG."""
@@ -294,8 +292,10 @@ class LocalStorageOperations(AbstractRunStorage):
         message = ""
         errors = []
         if batch_result:
-            for line_error in batch_result.error_summary.error_list:
-                errors.append(line_error.to_dict())
+            errors.extend(
+                line_error.to_dict()
+                for line_error in batch_result.error_summary.error_list
+            )
         if errors:
             try:
                 # use first line run error message as exception message if no exception raised
@@ -422,11 +422,10 @@ class LocalStorageOperations(AbstractRunStorage):
 
         if len(df) == len(inputs_line_numbers):
             return df
-        missing_lines = []
         lines_set = set(df[LINE_NUMBER].values)
-        for i in inputs_line_numbers:
-            if i not in lines_set:
-                missing_lines.append({LINE_NUMBER: i})
+        missing_lines = [
+            {LINE_NUMBER: i} for i in inputs_line_numbers if i not in lines_set
+        ]
         df_to_append = pd.DataFrame(missing_lines)
         res = pd.concat([df, df_to_append], ignore_index=True)
         res = res.sort_values(by=LINE_NUMBER, ascending=True)

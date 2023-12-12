@@ -6,13 +6,9 @@ from my_tool_package.tools.tool_with_custom_strong_type_connection import MyCust
 
 @pytest.fixture
 def my_custom_connection() -> MyCustomConnection:
-    my_custom_connection = MyCustomConnection(
-        {
-            "api_key" : "my-api-key",
-            "api_base" : "my-api-base"
-        }
+    return MyCustomConnection(
+        {"api_key": "my-api-key", "api_base": "my-api-base"}
     )
-    return my_custom_connection
 
 
 class TestMyToolWithCustomStrongTypeConnection:

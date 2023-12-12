@@ -20,7 +20,7 @@ def start():
 
     def show_image(image, key=None):
         if not image.startswith("data:image"):
-            st.image(key + ',' + image)
+            st.image(f'{key},{image}')
         else:
             st.image(image)
 
@@ -116,20 +116,18 @@ def start():
                 render_message(role, message_items)
 
     def get_chat_history_from_session():
-        if "history" in st.session_state:
-            return st.session_state.history
-        return []
+        return st.session_state.history if "history" in st.session_state else []
 
     def submit(**kwargs) -> None:
         st.session_state.messages.append(("user", kwargs))
         session_state_history = dict()
-        session_state_history.update({"inputs": kwargs})
+        session_state_history["inputs"] = kwargs
         with container:
             render_message("user", kwargs)
         # Force append chat history to kwargs
         response = run_flow(kwargs)
         st.session_state.messages.append(("assistant", response))
-        session_state_history.update({"outputs": response})
+        session_state_history["outputs"] = response
         st.session_state.history.append(session_state_history)
         with container:
             render_message("assistant", response)

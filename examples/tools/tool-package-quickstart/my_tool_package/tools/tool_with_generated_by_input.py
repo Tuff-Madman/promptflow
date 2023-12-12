@@ -52,8 +52,7 @@ def generate_index_json(
             "embedding_deployment": "retrieved_embedding_deployment"
         }
 
-    result = json.dumps(inputs)
-    return result
+    return json.dumps(inputs)
 
 
 def reverse_generate_index_json(index_json: str) -> Dict:
@@ -61,9 +60,7 @@ def reverse_generate_index_json(index_json: str) -> Dict:
     """
     import json
 
-    # Calculate the UI inputs based on the index_json
-    result = json.loads(index_json)
-    return result
+    return json.loads(index_json)
 
 
 def list_index_types(subscription_id, resource_group_name, workspace_name) -> List[str]:

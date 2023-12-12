@@ -82,12 +82,7 @@ def create_environment(ml_client: MLClient) -> str:
     workspace_id = ml_client._workspaces._operation.get(
         resource_group_name=resource_group_name, workspace_name=workspace_name
     ).workspace_id
-    # concat environment asset id
-    asset_id = (
-        f"azureml://locations/{location}/workspaces/{workspace_id}"
-        f"/environments/{env.name}/versions/{env.version}"
-    )
-    return asset_id
+    return f"azureml://locations/{location}/workspaces/{workspace_id}/environments/{env.name}/versions/{env.version}"
 
 
 def main(args: argparse.Namespace):

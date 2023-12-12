@@ -30,8 +30,7 @@ def async_run_allowing_running_loop(async_func, *args, **kwargs):
     To address this issue, we add a check for the event loop here. If the current thread already has an
     event loop, we run _exec_batch in a new thread; otherwise, we run it in the current thread.
     """
-    if _has_running_loop():
-        with ThreadPoolExecutor(1) as executor:
-            return executor.submit(lambda: asyncio.run(async_func(*args, **kwargs))).result()
-    else:
+    if not _has_running_loop():
         return asyncio.run(async_func(*args, **kwargs))
+    with ThreadPoolExecutor(1) as executor:
+        return executor.submit(lambda: asyncio.run(async_func(*args, **kwargs))).result()

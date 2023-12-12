@@ -95,18 +95,22 @@ def overwrite_connections(flow_dag: dict, connections: dict, working_dir: PathLi
         node = node_name_2_node[node_name]
         executable_node = executable_flow.get_node(node_name=node_name)
         if executable_flow.is_llm_node(executable_node):
-            unsupported_keys = connection_dict.keys() - SUPPORTED_CONNECTION_FIELDS
-            if unsupported_keys:
+            if (
+                unsupported_keys := connection_dict.keys()
+                - SUPPORTED_CONNECTION_FIELDS
+            ):
                 raise InvalidFlowError(
                     f"Unsupported llm connection overwrite keys: {unsupported_keys},"
                     f" only {SUPPORTED_CONNECTION_FIELDS} are supported."
                 )
             try:
-                connection = connection_dict.get(ConnectionFields.CONNECTION)
-                if connection:
+                if connection := connection_dict.get(
+                    ConnectionFields.CONNECTION
+                ):
                     node[ConnectionFields.CONNECTION] = connection
-                deploy_name = connection_dict.get(ConnectionFields.DEPLOYMENT_NAME)
-                if deploy_name:
+                if deploy_name := connection_dict.get(
+                    ConnectionFields.DEPLOYMENT_NAME
+                ):
                     node[INPUTS][ConnectionFields.DEPLOYMENT_NAME] = deploy_name
             except KeyError as e:
                 raise InvalidFlowError(
@@ -161,8 +165,7 @@ def variant_overwrite_context(
             overwrite_flow(flow_dag, overrides)
             flow_dag.pop("additional_includes", None)
             dump_flow_dag(flow_dag, Path(temp_dir))
-            flow = load_flow(temp_dir)
-            yield flow
+            yield load_flow(temp_dir)
     else:
         # Generate a flow, the code path points to the original flow folder,
         # the dag path points to the temp dag file after overwriting variant.
@@ -171,8 +174,7 @@ def variant_overwrite_context(
             overwrite_connections(flow_dag, connections, working_dir=flow_dir_path)
             overwrite_flow(flow_dag, overrides)
             flow_path = dump_flow_dag(flow_dag, Path(temp_dir))
-            flow = Flow(code=flow_dir_path, path=flow_path, dag=flow_dag)
-            yield flow
+            yield Flow(code=flow_dir_path, path=flow_path, dag=flow_dag)
 
 
 class SubmitterHelper:
@@ -199,20 +201,20 @@ class SubmitterHelper:
 
     @staticmethod
     def resolve_connection_names_from_tool_meta(tools_meta: dict, flow_dag: dict,):
-        connection_names = set({})
+        if not tools_meta:
+            return []
+        packages = tools_meta.get("package", {})
         tool_names = set({})
-        if tools_meta:
-            packages = tools_meta.get("package", {})
-            for key, pkg in packages.items():
-                inputs = pkg.get("inputs", {})
-                if "connection" in inputs and inputs["connection"].get("type", []) == ["object"]:
-                    tool_names.add(key)
-            nodes = flow_dag.get("nodes", [])
-            for node in nodes:
-                if node.get("source", {}).get("tool", "") in tool_names:
-                    connection_names.add(node["inputs"]["connection"])
-            return list(connection_names)
-        return []
+        for key, pkg in packages.items():
+            inputs = pkg.get("inputs", {})
+            if "connection" in inputs and inputs["connection"].get("type", []) == ["object"]:
+                tool_names.add(key)
+        nodes = flow_dag.get("nodes", [])
+        connection_names = set({})
+        for node in nodes:
+            if node.get("source", {}).get("tool", "") in tool_names:
+                connection_names.add(node["inputs"]["connection"])
+        return list(connection_names)
 
     @classmethod
     def resolve_environment_variables(cls, environment_variables: dict, client=None):

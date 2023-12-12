@@ -55,8 +55,7 @@ def _get_connection_operation(working_directory=None):
     from promptflow._sdk._utils import get_connection_operation
 
     connection_provider = Configuration().get_connection_provider(path=working_directory)
-    connection_operation = get_connection_operation(connection_provider)
-    return connection_operation
+    return get_connection_operation(connection_provider)
 
 
 @api.route("/")
@@ -72,8 +71,7 @@ class ConnectionList(Resource):
         all_results = request.args.get("all_results", default=False, type=bool)
 
         connections = connection_op.list(max_results=max_results, all_results=all_results)
-        connections_dict = [connection._to_dict() for connection in connections]
-        return connections_dict
+        return [connection._to_dict() for connection in connections]
 
 
 @api.route("/<string:name>")

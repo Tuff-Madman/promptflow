@@ -58,13 +58,13 @@ def main():
         with open(HOME_PROMPT_FLOW_DIR / PF_SERVICE_PORT_FILE, "r") as f:
             service_config = yaml.safe_load(f) or {}
             port = service_config.get("service", {}).get("port", None)
-        if not port:
-            with open(HOME_PROMPT_FLOW_DIR / PF_SERVICE_PORT_FILE, "w") as f:
-                # Set random port to ~/.promptflow/pf.yaml
-                port = get_random_port()
-                service_config["service"] = service_config.get("service", {})
-                service_config["service"]["port"] = port
-                yaml.dump(service_config, f)
+    if not port:
+        with open(HOME_PROMPT_FLOW_DIR / PF_SERVICE_PORT_FILE, "w") as f:
+            # Set random port to ~/.promptflow/pf.yaml
+            port = get_random_port()
+            service_config["service"] = service_config.get("service", {})
+            service_config["service"]["port"] = port
+            yaml.dump(service_config, f)
 
     if is_port_in_use(port):
         app.logger.warning(f"Service port {port} is used.")

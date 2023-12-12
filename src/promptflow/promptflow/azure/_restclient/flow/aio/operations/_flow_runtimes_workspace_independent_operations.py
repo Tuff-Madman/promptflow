@@ -59,7 +59,7 @@ class FlowRuntimesWorkspaceIndependentOperations:
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_runtime_latest_config_request(
             template_url=self.get_runtime_latest_config.metadata['url'],
         )
@@ -76,10 +76,7 @@ class FlowRuntimesWorkspaceIndependentOperations:
 
         deserialized = self._deserialize('RuntimeConfiguration', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_runtime_latest_config.metadata = {'url': '/flow/api/runtimes/latestConfig'}  # type: ignore
 

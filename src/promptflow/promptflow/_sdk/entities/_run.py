@@ -344,9 +344,7 @@ class Run(YAMLTranslatableMixin):
             if self.run:
                 run_name = self.run.name if isinstance(self.run, Run) else self.run
                 result[RunDataKeys.RUN] = properties.pop(FlowRunProperties.RUN, run_name)
-            # add exception part if any
-            exception_dict = local_storage.load_exception()
-            if exception_dict:
+            if exception_dict := local_storage.load_exception():
                 if exclude_additional_info:
                     exception_dict.pop("additionalInfo", None)
                 if exclude_debug_info:
@@ -446,13 +444,11 @@ class Run(YAMLTranslatableMixin):
     def _get_flow_dir(self) -> Path:
         if not self._use_remote_flow:
             flow = Path(self.flow)
-            if flow.is_dir():
-                return flow
-            return flow.parent
+            return flow if flow.is_dir() else flow.parent
         raise UserErrorException("Cannot get flow directory for remote flow.")
 
     @classmethod
-    def _get_schema_cls(self):
+    def _get_schema_cls(cls):
         return RunSchema
 
     def _to_rest_object(self):
@@ -464,16 +460,15 @@ class Run(YAMLTranslatableMixin):
             SubmitBulkRunRequest,
         )
 
-        if self.run is not None:
-            if isinstance(self.run, Run):
-                variant = self.run.name
-            elif isinstance(self.run, str):
-                variant = self.run
-            else:
-                raise UserErrorException(f"Invalid run type: {type(self.run)}")
-        else:
+        if self.run is None:
             variant = None
 
+        elif isinstance(self.run, Run):
+            variant = self.run.name
+        elif isinstance(self.run, str):
+            variant = self.run
+        else:
+            raise UserErrorException(f"Invalid run type: {type(self.run)}")
         if not variant and not self.data:
             raise UserErrorException("Either run or data should be provided")
 
@@ -517,36 +512,35 @@ class Run(YAMLTranslatableMixin):
             run_display_name_generation_type=RunDisplayNameGenerationType.USER_PROVIDED_MACRO,
         )
 
-        if str(self.flow).startswith(REMOTE_URI_PREFIX):
-            if not self._use_remote_flow:
-                # in normal case, we will upload local flow to datastore and resolve the self.flow to be remote uri
-                # upload via _check_and_upload_path
-                # submit with params FlowDefinitionDataStoreName and FlowDefinitionBlobPath
-                path_uri = AzureMLDatastorePathUri(str(self.flow))
-                return common_submit_bulk_run_request(
-                    flow_definition_data_store_name=path_uri.datastore,
-                    flow_definition_blob_path=path_uri.path,
-                )
-            else:
-                # if the flow is a remote flow in the beginning, we will submit with params FlowDefinitionResourceID
-                # submit with params flow_definition_resource_id which will be resolved in pfazure run create operation
-                # the flow resource id looks like: "azureml://locations/<region>/workspaces/<ws-name>/flows/<flow-name>"
-                if not isinstance(self.flow, str) or (
-                    not self.flow.startswith(FLOW_RESOURCE_ID_PREFIX) and not self.flow.startswith(REGISTRY_URI_PREFIX)
-                ):
-                    raise UserErrorException(
-                        f"Invalid flow value when transforming to rest object: {self.flow!r}. "
-                        f"Expecting a flow definition resource id starts with '{FLOW_RESOURCE_ID_PREFIX}' "
-                        f"or a flow registry uri starts with '{REGISTRY_URI_PREFIX}'"
-                    )
-                return common_submit_bulk_run_request(
-                    flow_definition_resource_id=self.flow,
-                )
-        else:
+        if not str(self.flow).startswith(REMOTE_URI_PREFIX):
             # upload via CodeOperations.create_or_update
             # submit with param FlowDefinitionDataUri
             return common_submit_bulk_run_request(
                 flow_definition_data_uri=str(self.flow),
+            )
+        if not self._use_remote_flow:
+            # in normal case, we will upload local flow to datastore and resolve the self.flow to be remote uri
+            # upload via _check_and_upload_path
+            # submit with params FlowDefinitionDataStoreName and FlowDefinitionBlobPath
+            path_uri = AzureMLDatastorePathUri(str(self.flow))
+            return common_submit_bulk_run_request(
+                flow_definition_data_store_name=path_uri.datastore,
+                flow_definition_blob_path=path_uri.path,
+            )
+        else:
+            # if the flow is a remote flow in the beginning, we will submit with params FlowDefinitionResourceID
+            # submit with params flow_definition_resource_id which will be resolved in pfazure run create operation
+            # the flow resource id looks like: "azureml://locations/<region>/workspaces/<ws-name>/flows/<flow-name>"
+            if not isinstance(self.flow, str) or (
+                not self.flow.startswith(FLOW_RESOURCE_ID_PREFIX) and not self.flow.startswith(REGISTRY_URI_PREFIX)
+            ):
+                raise UserErrorException(
+                    f"Invalid flow value when transforming to rest object: {self.flow!r}. "
+                    f"Expecting a flow definition resource id starts with '{FLOW_RESOURCE_ID_PREFIX}' "
+                    f"or a flow registry uri starts with '{REGISTRY_URI_PREFIX}'"
+                )
+            return common_submit_bulk_run_request(
+                flow_definition_resource_id=self.flow,
             )
 
     def _check_run_status_is_completed(self) -> None:
@@ -571,19 +565,15 @@ class Run(YAMLTranslatableMixin):
         if Path(self.flow).is_dir():
             # local flow
             pass
-        elif isinstance(self.flow, str) and self.flow.startswith(REMOTE_URI_PREFIX):
-            # remote flow
-            pass
-        else:
+        elif not isinstance(self.flow, str) or not self.flow.startswith(
+            REMOTE_URI_PREFIX
+        ):
             raise UserErrorException(
                 f"Invalid flow value: {self.flow!r}. Expecting a local flow folder path or a remote flow pattern "
                 f"like '{REMOTE_URI_PREFIX}<flow-name>'"
             )
 
-        if is_remote_uri(self.data):
-            # Pass through ARM id or remote url, the error will happen in runtime if format is not correct currently.
-            pass
-        else:
+        if not is_remote_uri(self.data):
             if self.data and not Path(self.data).exists():
                 raise UserErrorException(f"data path {self.data} does not exist")
         if not self.run and not self.data:

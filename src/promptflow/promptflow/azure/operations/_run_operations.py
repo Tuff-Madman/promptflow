@@ -130,7 +130,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
     def _run_history_endpoint_url(self):
         """Get the endpoint url for the workspace."""
         endpoint = self._service_caller._service_endpoint
-        return endpoint + "history/v1.0" + self._service_caller._common_azure_url_pattern
+        return f"{endpoint}history/v1.0{self._service_caller._common_azure_url_pattern}"
 
     def _get_run_portal_url(self, run_id: str):
         """Get the portal url for the run."""
@@ -212,11 +212,10 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
 
     def _get_headers(self):
         token = self._credential.get_token("https://management.azure.com/.default").token
-        custom_header = {
+        return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        return custom_header
 
     @monitor_operation(activity_name="pfazure.runs.create_or_update", activity_type=ActivityType.PUBLICAPI)
     def create_or_update(self, run: Run, **kwargs) -> Run:
@@ -300,16 +299,15 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
         }
 
         endpoint = self._run_history_endpoint_url.replace("/history", "/index")
-        url = endpoint + "/entities"
+        url = f"{endpoint}/entities"
         response = requests.post(url, headers=headers, json=pay_load)
 
-        if response.status_code == 200:
-            entities = json.loads(response.text)
-            runs = entities["value"]
-        else:
+        if response.status_code != 200:
             raise RunRequestException(
                 f"Failed to get runs from service. Code: {response.status_code}, text: {response.text}"
             )
+        entities = json.loads(response.text)
+        runs = entities["value"]
         refined_runs = []
         for run in runs:
             run_id = run["properties"]["runId"]
@@ -328,8 +326,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
         """
         run = Run._validate_and_return_run_name(run)
         self._check_cloud_run_completed(run_name=run)
-        metrics = self._get_metrics_from_metric_service(run)
-        return metrics
+        return self._get_metrics_from_metric_service(run)
 
     @monitor_operation(activity_name="pfazure.runs.get_details", activity_type=ActivityType.PUBLICAPI)
     def get_details(
@@ -373,11 +370,8 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
             num_line_runs = len(list(inputs.values())[0])
             num_outputs = len(list(outputs.values())[0])
             if num_line_runs > num_outputs:
-                # build full set with None as placeholder
-                filled_outputs = {}
                 output_keys = list(outputs.keys())
-                for k in output_keys:
-                    filled_outputs[k] = [None] * num_line_runs
+                filled_outputs = {k: [None] * num_line_runs for k in output_keys}
                 filled_outputs[LINE_NUMBER] = list(range(num_line_runs))
                 for i in range(num_outputs):
                     line_number = outputs[LINE_NUMBER][i]
@@ -425,7 +419,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
                 break
             start_index, end_index = start_index + CLOUD_RUNS_PAGE_SIZE, end_index + CLOUD_RUNS_PAGE_SIZE
             flow_runs += current_flow_runs
-        return flow_runs[0:max_results]
+        return flow_runs[:max_results]
 
     def _extract_metrics_from_metric_service_response(self, values) -> dict:
         """Get metrics from the metric service response."""
@@ -446,15 +440,14 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
         headers = self._get_headers()
         # refer to MetricController: https://msdata.visualstudio.com/Vienna/_git/vienna?path=/src/azureml-api/src/Metric/EntryPoints/Api/Controllers/MetricController.cs&version=GBmaster  # noqa: E501
         endpoint = self._run_history_endpoint_url.replace("/history/v1.0", "/metric/v2.0")
-        url = endpoint + f"/runs/{run_id}/lastvalues"
+        url = f"{endpoint}/runs/{run_id}/lastvalues"
         response = requests.post(url, headers=headers, json={})
-        if response.status_code == 200:
-            values = response.json()
-            return self._extract_metrics_from_metric_service_response(values)
-        else:
+        if response.status_code != 200:
             raise RunRequestException(
                 f"Failed to get metrics from service. Code: {response.status_code}, text: {response.text}"
             )
+        values = response.json()
+        return self._extract_metrics_from_metric_service_response(values)
 
     @staticmethod
     def _is_system_metric(metric: str) -> bool:
@@ -485,7 +478,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
     def _get_run_from_run_history(self, flow_run_id, original_form=False, **kwargs):
         """Get run info from run history"""
         headers = self._get_headers()
-        url = self._run_history_endpoint_url + "/rundata"
+        url = f"{self._run_history_endpoint_url}/rundata"
 
         payload = {
             "runId": flow_run_id,
@@ -550,22 +543,21 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
             "pageSize": 50,
         }
         endpoint = self._run_history_endpoint_url.replace("/history", "/index")
-        url = endpoint + "/entities"
+        url = f"{endpoint}/entities"
         response = requests.post(url, json=payload, headers=headers)
-        if response.status_code == 200:
-            runs = response.json().get("value", None)
-            if not runs:
-                raise RunRequestException(
-                    f"Could not found run with run id {flow_run_id!r}, please double check the run id and try again."
-                )
-            run = runs[0]
-            run_id = run["properties"]["runId"]
-            run[RunDataKeys.PORTAL_URL] = self._get_run_portal_url(run_id=run_id)
-            return Run._from_index_service_entity(run)
-        else:
+        if response.status_code != 200:
             raise RunRequestException(
                 f"Failed to get run metrics from service. Code: {response.status_code}, text: {response.text}"
             )
+        runs = response.json().get("value", None)
+        if not runs:
+            raise RunRequestException(
+                f"Could not found run with run id {flow_run_id!r}, please double check the run id and try again."
+            )
+        run = runs[0]
+        run_id = run["properties"]["runId"]
+        run[RunDataKeys.PORTAL_URL] = self._get_run_portal_url(run_id=run_id)
+        return Run._from_index_service_entity(run)
 
     @monitor_operation(activity_name="pfazure.runs.archive", activity_type=ActivityType.PUBLICAPI)
     def archive(self, run: Union[str, Run]) -> Run:
@@ -728,7 +720,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
             )
             print(error_message)
 
-        if run.status == RunStatus.FAILED or run.status == RunStatus.CANCELED:
+        if run.status in [RunStatus.FAILED, RunStatus.CANCELED]:
             if run.status == RunStatus.FAILED:
                 try:
                     error_message = run._error["error"]["message"]
@@ -753,10 +745,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
         test_data = run.data
 
         def _get_data_type(_data):
-            if os.path.isdir(_data):
-                return AssetTypes.URI_FOLDER
-            else:
-                return AssetTypes.URI_FILE
+            return AssetTypes.URI_FOLDER if os.path.isdir(_data) else AssetTypes.URI_FILE
 
         if is_remote_uri(test_data):
             # Pass through ARM id or remote url
@@ -772,7 +761,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
                 show_progress=self._show_progress,
             )
             if data_type == AssetTypes.URI_FOLDER and test_data and not test_data.endswith("/"):
-                test_data = test_data + "/"
+                test_data = f"{test_data}/"
         else:
             raise ValueError(
                 f"Local path {test_data!r} not exist. "
@@ -802,14 +791,13 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
         # hash and truncate to avoid the session id getting too long
         # backend has a 64 bit limit for session id.
         # use hexdigest to avoid non-ascii characters in session id
-        session_id = str(hashlib.sha256(session_id.encode()).hexdigest())[:48]
+        session_id = hashlib.sha256(session_id.encode()).hexdigest()[:48]
         return session_id
 
     def _get_inputs_outputs_from_child_runs(self, runs: List[Dict[str, Any]]):
         """Get the inputs and outputs from the child runs."""
         inputs = {}
-        outputs = {}
-        outputs[LINE_NUMBER] = []
+        outputs = {LINE_NUMBER: []}
         for run in runs:
             index, run_inputs, run_outputs = run["index"], run["inputs"], run["output"]
             if isinstance(run_inputs, dict):
@@ -978,7 +966,7 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
     def _modify_run_in_run_history(self, run_id: str, payload: dict) -> Run:
         """Modify run info in run history."""
         headers = self._get_headers()
-        url = self._run_history_endpoint_url + f"/runs/{run_id}/modify"
+        url = f"{self._run_history_endpoint_url}/runs/{run_id}/modify"
 
         response = requests.patch(url, headers=headers, json=payload)
 
@@ -1030,14 +1018,13 @@ class RunOperations(WorkspaceTelemetryMixin, _ScopeDependentOperations):
 
         run_folder = output_directory / run
         if run_folder.exists():
-            if overwrite is True:
-                logger.warning("Removing existing run folder %r.", run_folder.resolve().as_posix())
-                shutil.rmtree(run_folder)
-            else:
+            if overwrite is not True:
                 raise UserErrorException(
                     f"Run folder {run_folder.resolve().as_posix()!r} already exists, please specify a new output path "
                     f"or set the overwrite flag to be true."
                 )
+            logger.warning("Removing existing run folder %r.", run_folder.resolve().as_posix())
+            shutil.rmtree(run_folder)
         run_folder.mkdir(parents=True)
 
         run_downloader = AsyncRunDownloader(run=run, run_ops=self, output_folder=run_folder)

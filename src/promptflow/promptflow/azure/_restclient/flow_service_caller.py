@@ -94,7 +94,7 @@ class FlowServiceCaller(RequestTelemetryMixin):
 
     def __init__(self, workspace, credential, operation_scope, base_url=None, region=None, **kwargs):
         """Initializes DesignerServiceCaller."""
-        if 'get_instance' != sys._getframe().f_back.f_code.co_name:
+        if sys._getframe().f_back.f_code.co_name != 'get_instance':
             raise UserErrorException(
                 'Please use `_FlowServiceCallerFactory.get_instance()` to get service caller '
                 'instead of creating a new one.'
@@ -119,8 +119,10 @@ class FlowServiceCaller(RequestTelemetryMixin):
 
     def _get_headers(self):
         token = self._credential.get_token("https://management.azure.com/.default")
-        custom_header = {"Authorization": "Bearer " + token.token, "x-ms-client-request-id": self._request_id}
-        return custom_header
+        return {
+            "Authorization": f"Bearer {token.token}",
+            "x-ms-client-request-id": self._request_id,
+        }
 
     def _set_headers_with_user_aml_token(self, headers):
         # NOTE: this copied from https://github.com/Azure/azure-sdk-for-python/blob/05f1438ad0a5eb536e5c49d8d9d44b798445044a/sdk/ml/azure-ai-ml/azure/ai/ml/operations/_job_operations.py#L1495C12-L1495C12
@@ -160,13 +162,7 @@ class FlowServiceCaller(RequestTelemetryMixin):
     @cached_property
     def _common_azure_url_pattern(self):
         operation_scope = self._operation_scope
-        pattern = (
-            f"/subscriptions/{operation_scope.subscription_id}"
-            f"/resourceGroups/{operation_scope.resource_group_name}"
-            f"/providers/Microsoft.MachineLearningServices"
-            f"/workspaces/{operation_scope.workspace_name}"
-        )
-        return pattern
+        return f"/subscriptions/{operation_scope.subscription_id}/resourceGroups/{operation_scope.resource_group_name}/providers/Microsoft.MachineLearningServices/workspaces/{operation_scope.workspace_name}"
 
     @_request_wrapper()
     def create_flow(
@@ -457,7 +453,7 @@ class FlowServiceCaller(RequestTelemetryMixin):
         **kwargs  # type: Any
     ):
         from azure.core.exceptions import ClientAuthenticationError, HttpResponseError, ResourceExistsError, \
-            ResourceNotFoundError, map_error
+                ResourceNotFoundError, map_error
         from promptflow.azure._restclient.flow.operations._flow_sessions_operations import (
             build_create_flow_session_request,
             _convert_request,
@@ -466,7 +462,7 @@ class FlowServiceCaller(RequestTelemetryMixin):
         from promptflow.azure._constants._flow import SESSION_CREATION_TIMEOUT_SECONDS
         from promptflow.azure._restclient.flow.models import SetupFlowSessionAction
 
-        
+
         headers = self._get_headers()
         # pass user aml token to session create so user don't need to do authentication again in CI
         self._set_headers_with_user_aml_token(headers)
@@ -529,18 +525,15 @@ class FlowServiceCaller(RequestTelemetryMixin):
                 timeout_seconds = float(os.environ.get(SESSION_CREATION_TIMEOUT_ENV_VAR))
             except ValueError:
                 raise UserErrorException(
-                    "Environment variable {} with value {} set but failed to parse. "
-                    "Please reset the value to a number.".format(
-                        SESSION_CREATION_TIMEOUT_ENV_VAR, os.environ.get(SESSION_CREATION_TIMEOUT_ENV_VAR)
-                    )
+                    f"Environment variable {SESSION_CREATION_TIMEOUT_ENV_VAR} with value {os.environ.get(SESSION_CREATION_TIMEOUT_ENV_VAR)} set but failed to parse. Please reset the value to a number."
                 )
         # InProgress is only known non-terminal status for now.
         while status in [None, "InProgress"]:
             if time_run + sleep_period > timeout_seconds:
                 message = f"Polling timeout for session {session_id} {action} " \
-                          f"for {AUTOMATIC_RUNTIME} after {timeout_seconds} seconds.\n" \
-                          f"To proceed the {action} for {AUTOMATIC_RUNTIME}, you can retry using the same flow, " \
-                          "and we will continue polling status of previous session. \n"
+                              f"for {AUTOMATIC_RUNTIME} after {timeout_seconds} seconds.\n" \
+                              f"To proceed the {action} for {AUTOMATIC_RUNTIME}, you can retry using the same flow, " \
+                              "and we will continue polling status of previous session. \n"
                 raise Exception(message)
             time_run += sleep_period
             time.sleep(sleep_period)
@@ -554,8 +547,7 @@ class FlowServiceCaller(RequestTelemetryMixin):
                 logger.debug(f"Waiting for session {action}, current status: {status}")
 
         if status == "Succeeded":
-            error_msg = pydash.get(response, "error.message", None)
-            if error_msg:
+            if error_msg := pydash.get(response, "error.message", None):
                 logger.warning(
                     f"Session {action} finished with status {status}. "
                     f"But there are warnings when installing the packages: {error_msg}."

@@ -69,7 +69,10 @@ class ToolOperations:
                 )
             if settings.dynamic_list:
                 dynamic_func_inputs = inspect.signature(settings.dynamic_list._func_obj).parameters
-                has_kwargs = any([param.kind == param.VAR_KEYWORD for param in dynamic_func_inputs.values()])
+                has_kwargs = any(
+                    param.kind == param.VAR_KEYWORD
+                    for param in dynamic_func_inputs.values()
+                )
                 required_inputs = [
                     k
                     for k, v in dynamic_func_inputs.items()
@@ -90,7 +93,7 @@ class ToolOperations:
                         if func_input in required_inputs:
                             required_inputs.remove(func_input)
                 # Check required input of dynamic_list function
-                if len(required_inputs) != 0:
+                if required_inputs:
                     raise UserErrorException(f"Missing required input(s) of dynamic_list function: {required_inputs}")
 
     def _serialize_tool(self, tool_func, initialize_inputs=None):
@@ -129,9 +132,7 @@ class ToolOperations:
                 extra_info[ICON] = icon
             construct_tool.update(extra_info)
 
-        # Update tool input settings
-        input_settings = getattr(tool_func, "__input_settings")
-        if input_settings:
+        if input_settings := getattr(tool_func, "__input_settings"):
             tool_inputs = construct_tool.get("inputs", {})
             generated_by_inputs = {}
             self._validate_input_settings(tool_inputs, input_settings)
@@ -163,8 +164,7 @@ class ToolOperations:
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
         icon_image = Image(buffered.getvalue(), mime_type="image/png")
-        image_url = convert_multimedia_data_to_base64(icon_image, with_type=True)
-        return image_url
+        return convert_multimedia_data_to_base64(icon_image, with_type=True)
 
     @monitor_operation(activity_name="pf.tools.list", activity_type=ActivityType.PUBLICAPI)
     def list(

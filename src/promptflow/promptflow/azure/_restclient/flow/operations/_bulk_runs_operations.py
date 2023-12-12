@@ -412,10 +412,7 @@ class BulkRunsOperations(object):
         if response.status_code == 204:
             deserialized = self._deserialize('str', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     submit_bulk_run.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/submit'}  # type: ignore
 
@@ -451,7 +448,7 @@ class BulkRunsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_cancel_flow_run_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -472,10 +469,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('str', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     cancel_flow_run.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}/cancel'}  # type: ignore
 
@@ -543,10 +537,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('FlowDto', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     clone_flow_from_flow_run.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}/clone'}  # type: ignore
 
@@ -582,7 +573,7 @@ class BulkRunsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_flow_run_info_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -603,10 +594,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('FlowRunInfo', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_flow_run_info.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}'}  # type: ignore
 
@@ -651,7 +639,7 @@ class BulkRunsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_flow_child_runs_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -675,10 +663,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('[object]', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_flow_child_runs.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}/childRuns'}  # type: ignore
 
@@ -729,7 +714,7 @@ class BulkRunsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_flow_node_runs_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -755,10 +740,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('[object]', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_flow_node_runs.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}/nodeRuns/{nodeName}'}  # type: ignore
 
@@ -797,7 +779,7 @@ class BulkRunsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_flow_node_run_base_path_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -819,10 +801,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('FlowRunBasePath', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_flow_node_run_base_path.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}/nodeRuns/{nodeName}/basePath'}  # type: ignore
 
@@ -858,7 +837,7 @@ class BulkRunsOperations(object):
         }
         error_map.update(kwargs.pop('error_map', {}))
 
-        
+
         request = build_get_flow_run_log_content_request(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
@@ -879,10 +858,7 @@ class BulkRunsOperations(object):
 
         deserialized = self._deserialize('str', pipeline_response)
 
-        if cls:
-            return cls(pipeline_response, deserialized, {})
-
-        return deserialized
+        return cls(pipeline_response, deserialized, {}) if cls else deserialized
 
     get_flow_run_log_content.metadata = {'url': '/flow/api/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.MachineLearningServices/workspaces/{workspaceName}/BulkRuns/{flowRunId}/logContent'}  # type: ignore
 

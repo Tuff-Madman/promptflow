@@ -88,8 +88,7 @@ class BatchInputsProcessor:
             )
 
         inputs_mapping = self._complete_inputs_mapping_by_default_value(inputs_mapping)
-        resolved_inputs = self._apply_inputs_mapping_for_all_lines(inputs, inputs_mapping)
-        return resolved_inputs
+        return self._apply_inputs_mapping_for_all_lines(inputs, inputs_mapping)
 
     def _complete_inputs_mapping_by_default_value(self, inputs_mapping):
         inputs_mapping = inputs_mapping or {}
@@ -160,8 +159,7 @@ class BatchInputsProcessor:
                 )
             )
 
-        result = [apply_inputs_mapping(item, inputs_mapping) for item in merged_list]
-        return result
+        return [apply_inputs_mapping(item, inputs_mapping) for item in merged_list]
 
     def _merge_input_dicts_by_line(
         self,
@@ -182,7 +180,9 @@ class BatchInputsProcessor:
         all_lengths_without_line_number = {
             input_key: len(list_of_one_input)
             for input_key, list_of_one_input in input_dict.items()
-            if not any(LINE_NUMBER_KEY in one_item for one_item in list_of_one_input)
+            if all(
+                LINE_NUMBER_KEY not in one_item for one_item in list_of_one_input
+            )
         }
         if len(set(all_lengths_without_line_number.values())) > 1:
             raise InputMappingError(

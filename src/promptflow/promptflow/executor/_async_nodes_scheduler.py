@@ -61,7 +61,7 @@ class AsyncNodesScheduler:
     async def _wait_and_complete_nodes(self, task2nodes: Dict[Task, Node], dag_manager: DAGManager) -> Dict[Task, Node]:
         if not task2nodes:
             raise NoNodeExecutedError("No nodes are ready for execution, but the flow is not completed.")
-        tasks = [task for task in task2nodes]
+        tasks = list(task2nodes)
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         dag_manager.complete_nodes({task2nodes[task].name: task.result() for task in done})
         for task in done:
@@ -74,12 +74,9 @@ class AsyncNodesScheduler:
         context: FlowExecutionContext,
         executor: ThreadPoolExecutor,
     ) -> Dict[Task, Node]:
-        # Bypass nodes and update node run info until there are no nodes to bypass
-        nodes_to_bypass = dag_manager.pop_bypassable_nodes()
-        while nodes_to_bypass:
+        while nodes_to_bypass := dag_manager.pop_bypassable_nodes():
             for node in nodes_to_bypass:
                 context.bypass_node(node)
-            nodes_to_bypass = dag_manager.pop_bypassable_nodes()
         # Create tasks for ready nodes
         return {
             self._create_node_task(node, dag_manager, context, executor): node

@@ -6,7 +6,7 @@ from promptflow.connections import AzureOpenAIConnection, OpenAIConnection
 
 from chat_with_pdf.utils.lock import acquire_lock
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) + "/chat_with_pdf/"
+BASE_DIR = f"{os.path.dirname(os.path.abspath(__file__))}/chat_with_pdf/"
 
 
 @tool
@@ -28,10 +28,10 @@ def setup_env(connection: Union[AzureOpenAIConnection, OpenAIConnection], config
     for key in config:
         os.environ[key] = str(config[key])
 
-    with acquire_lock(BASE_DIR + "create_folder.lock"):
-        if not os.path.exists(BASE_DIR + ".pdfs"):
-            os.mkdir(BASE_DIR + ".pdfs")
-        if not os.path.exists(BASE_DIR + ".index/.pdfs"):
-            os.makedirs(BASE_DIR + ".index/.pdfs")
+    with acquire_lock(f"{BASE_DIR}create_folder.lock"):
+        if not os.path.exists(f"{BASE_DIR}.pdfs"):
+            os.mkdir(f"{BASE_DIR}.pdfs")
+        if not os.path.exists(f"{BASE_DIR}.index/.pdfs"):
+            os.makedirs(f"{BASE_DIR}.index/.pdfs")
 
     return "Ready"

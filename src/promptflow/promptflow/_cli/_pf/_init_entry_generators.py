@@ -89,9 +89,7 @@ class ValueType(str, Enum):
             return ValueType.BOOL
         if t == str:
             return ValueType.STRING
-        if t == list:
-            return ValueType.LIST
-        return ValueType.OBJECT
+        return ValueType.LIST if t == list else ValueType.OBJECT
 
 
 class ToolMetaGenerator(BaseGenerator):
@@ -243,7 +241,7 @@ class StreamlitFileReplicator:
                         raise UserErrorException(
                             f"Only support string or list type for chat input, but got {value.type.value}."
                         )
-                    results.update({flow_input: (value.default, value.type.value)})
+                    results[flow_input] = (value.default, value.type.value)
         else:
             results = {
                 flow_input: (value.default, value.type.value) for flow_input, value in self.executable.inputs.items()
@@ -345,16 +343,15 @@ class ToolPackageGenerator(BaseGenerator):
 
     @property
     def extra_info(self):
-        if self._extra_info:
-            extra_info = {}
-            for k, v in self._extra_info.items():
-                try:
-                    extra_info[k] = literal_eval(v)
-                except Exception:
-                    extra_info[k] = repr(v)
-            return extra_info
-        else:
+        if not self._extra_info:
             return {}
+        extra_info = {}
+        for k, v in self._extra_info.items():
+            try:
+                extra_info[k] = literal_eval(v)
+            except Exception:
+                extra_info[k] = repr(v)
+        return extra_info
 
     @property
     def tpl_file(self):
@@ -429,6 +426,4 @@ class InitGenerator(BaseGenerator):
         pass
 
     def generate(self) -> str:
-        with open(self.tpl_file) as f:
-            init_content = f.read()
-        return init_content
+        return Path(self.tpl_file).read_text()

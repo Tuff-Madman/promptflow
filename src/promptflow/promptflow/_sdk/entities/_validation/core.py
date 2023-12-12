@@ -57,7 +57,7 @@ class Diagnostic(object):
         :return: The formatted diagnostic
         :rtype: str
         """
-        return "{}: {}".format(self.yaml_path, self.message)
+        return f"{self.yaml_path}: {self.message}"
 
     @classmethod
     def create_instance(
@@ -110,7 +110,7 @@ class ValidationResult(object):
             if diagnostic.yaml_path not in messages:
                 messages[diagnostic.yaml_path] = diagnostic.message
             else:
-                messages[diagnostic.yaml_path] += "; " + diagnostic.message
+                messages[diagnostic.yaml_path] += f"; {diagnostic.message}"
         return messages
 
     @property
@@ -205,7 +205,7 @@ class MutableValidationResult(ValidationResult):
                     if new_diagnostic.yaml_path == "*":
                         new_diagnostic.yaml_path = field_name
                     else:
-                        new_diagnostic.yaml_path = field_name + "." + new_diagnostic.yaml_path
+                        new_diagnostic.yaml_path = f"{field_name}.{new_diagnostic.yaml_path}"
                 target_diagnostics.append(new_diagnostic)
         return self
 
@@ -230,11 +230,11 @@ class MutableValidationResult(ValidationResult):
         :rtype: MutableValidationResult
         """
         # pylint: disable=logging-not-lazy
-        if raise_error is False:
+        if not raise_error:
             return self
 
         if self._warnings:
-            module_logger.warning("Warnings: %s" % str(self._warnings))
+            module_logger.warning(f"Warnings: {str(self._warnings)}")
 
         if not self.passed:
             if error_func is None:
@@ -505,9 +505,7 @@ class _YamlLocationResolver:
                         next_path = source_path.parent / next_path
                     if next_path.is_file():
                         return self._resolve_recursively(attrs, source_path=next_path)
-                except OSError:
-                    pass
-                except TypeError:
+                except (OSError, TypeError):
                     pass
                 # if not, return current section
                 break

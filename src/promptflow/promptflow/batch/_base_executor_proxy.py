@@ -78,7 +78,7 @@ class APIBasedExecutorProxy(AbstractExecutorProxy):
         # ensure service health
         await self._ensure_executor_health()
         # call execution api to get line results
-        url = self.api_endpoint + "/Execution"
+        url = f"{self.api_endpoint}/Execution"
         payload = {"run_id": run_id, "line_number": index, "inputs": inputs}
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, timeout=LINE_TIMEOUT_SEC)
@@ -99,7 +99,7 @@ class APIBasedExecutorProxy(AbstractExecutorProxy):
         await self._ensure_executor_health()
         # call aggregation api to get aggregation result
         async with httpx.AsyncClient() as client:
-            url = self.api_endpoint + "/Aggregation"
+            url = f"{self.api_endpoint}/Aggregation"
             payload = {"run_id": run_id, "batch_inputs": batch_inputs, "aggregation_inputs": aggregation_inputs}
             response = await client.post(url, json=payload, timeout=LINE_TIMEOUT_SEC)
         result = self._process_http_response(response)
@@ -109,20 +109,19 @@ class APIBasedExecutorProxy(AbstractExecutorProxy):
         if response.status_code == 200:
             # if the status code is 200, the response is the json dict of a line result
             return response.json()
-        else:
-            # if the status code is not 200, log the error
-            message_format = "Unexpected error when executing a line, status code: {status_code}, error: {error}"
-            bulk_logger.error(message_format.format(status_code=response.status_code, error=response.text))
-            # if response can be parsed as json, return the error dict
-            # otherwise, wrap the error in an UnexpectedError and return the error dict
-            try:
-                error_dict = response.json()
-                return error_dict["error"]
-            except (JSONDecodeError, KeyError):
-                unexpected_error = UnexpectedError(
-                    message_format=message_format, status_code=response.status_code, error=response.text
-                )
-                return ExceptionPresenter.create(unexpected_error).to_dict()
+        # if the status code is not 200, log the error
+        message_format = "Unexpected error when executing a line, status code: {status_code}, error: {error}"
+        bulk_logger.error(message_format.format(status_code=response.status_code, error=response.text))
+        # if response can be parsed as json, return the error dict
+        # otherwise, wrap the error in an UnexpectedError and return the error dict
+        try:
+            error_dict = response.json()
+            return error_dict["error"]
+        except (JSONDecodeError, KeyError):
+            unexpected_error = UnexpectedError(
+                message_format=message_format, status_code=response.status_code, error=response.text
+            )
+            return ExceptionPresenter.create(unexpected_error).to_dict()
 
     async def _ensure_executor_health(self):
         """Ensure the executor service is healthy before calling the API to get the results
@@ -142,7 +141,7 @@ class APIBasedExecutorProxy(AbstractExecutorProxy):
 
     async def _check_health(self):
         try:
-            health_url = self.api_endpoint + "/health"
+            health_url = f"{self.api_endpoint}/health"
             async with httpx.AsyncClient() as client:
                 response = await client.get(health_url)
             if response.status_code != 200:
